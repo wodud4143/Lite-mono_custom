@@ -1,0 +1,22 @@
+version: "3.8"
+
+services:
+  lite-mono:
+    image: lite-mono-dev
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: lite-mono-container
+    shm_size: "8g"
+    volumes:
+      - "C:/Users/wodud/OneDrive/Desktop/Develop/Lite-Mono:/workspace"
+    working_dir: /workspace
+    stdin_open: true
+    tty: true
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              capabilities: [gpu]
+    command: /bin/bash
