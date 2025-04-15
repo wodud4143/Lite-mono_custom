@@ -9,7 +9,7 @@ services:
     container_name: lite-mono-container
     shm_size: "8g"
     volumes:
-      - "C:/Users/wodud/OneDrive/Desktop/Develop/Lite-Mono:/workspace"
+      - "C:/Users/wodud/OneDrive/Desktop/Lite-mono_custom:/workspace"
     working_dir: /workspace
     stdin_open: true
     tty: true
