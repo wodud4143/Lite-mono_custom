@@ -1464,3 +1464,11 @@ epoch  48 | lr 0.000037 |lr_p 0.000040 | batch   3744 | examples/s:  29.8 | loss
 epoch  49 | lr 0.000033 |lr_p 0.000036 | batch    947 | examples/s:  26.4 | loss: 0.13096 | time elapsed: 17h01m28s | time left: 00h16m39s
 epoch  49 | lr 0.000033 |lr_p 0.000036 | batch   2947 | examples/s:  27.8 | loss: 0.11524 | time elapsed: 17h09m57s | time left: 00h08m00s
 epoch   0 | lr 0.000100 |lr_p 0.000100 | batch      0 | examples/s:   0.1 | loss: 0.17588 | time elapsed: 00h01m38s | time left: 00h00m00s
+epoch   0 | lr 0.000100 |lr_p 0.000100 | batch      0 | examples/s:   0.4 | loss: 0.15348 | time elapsed: 00h01m11s | time left: 00h00m00s
+epoch   0 | lr 0.000100 |lr_p 0.000100 | batch      0 | examples/s:   5.5 | loss: 0.16142 | time elapsed: 00h00m43s | time left: 00h00m00s
+epoch   0 | lr 0.000100 |lr_p 0.000100 | batch    250 | examples/s:  31.7 | loss: 0.14833 | time elapsed: 00h01m47s | time left: 28h37m00s
+epoch   0 | lr 0.000100 |lr_p 0.000100 | batch    500 | examples/s:  36.4 | loss: 0.11764 | time elapsed: 00h02m51s | time left: 22h46m19s
+epoch   0 | lr 0.000100 |lr_p 0.000100 | batch    750 | examples/s:  39.2 | loss: 0.13236 | time elapsed: 00h03m55s | time left: 20h50m28s
+epoch   0 | lr 0.000100 |lr_p 0.000100 | batch   1000 | examples/s:  35.2 | loss: 0.14190 | time elapsed: 00h04m58s | time left: 19h49m14s
+epoch   0 | lr 0.000100 |lr_p 0.000100 | batch   1250 | examples/s:  34.3 | loss: 0.13591 | time elapsed: 00h06m03s | time left: 19h15m05s
+epoch   0 | lr 0.000100 |lr_p 0.000100 | batch   1500 | examples/s:  36.9 | loss: 0.13125 | time elapsed: 00h07m06s | time left: 18h48m39s

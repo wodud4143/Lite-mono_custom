@@ -427,7 +427,7 @@ class LiteMono(nn.Module):
             # DepthwiseSeparableConv(in_channels=in_chans, out_channels=self.dims[0], kernel_size=3, stride=2, dilation = 3, bn_act=True),
             # DepthwiseSeparableConv(in_channels=self.dims[0], out_channels=self.dims[0], kernel_size=3, stride=1, dilation = 5,  bn_act=True),
             # DepthwiseSeparableConv(in_channels=self.dims[0], out_channels=self.dims[0], kernel_size=3, stride=1, dilation = 7,  bn_act=True),
-            InvertedBottleneck(in_channels=in_chans, out_channels=self.dims[0], kernel_size=3, dilation = 3),
+            InvertedBottleneck(in_channels=in_chans, out_channels=self.dims[0], kernel_size=3, stride = 2, dilation = 3),
             InvertedBottleneck(in_channels=self.dims[0], out_channels=self.dims[0], kernel_size=3, dilation = 5 ),
             InvertedBottleneck(in_channels=self.dims[0], out_channels=self.dims[0], kernel_size=3, dilation = 7),
         )
@@ -517,7 +517,7 @@ class LiteMono(nn.Module):
         
        
         # region downsampling
-        x = self.downsample(x)
+        # x = self.downsample(x)
         
         x = self.stem2(torch.cat((x, x_down[0]), dim=1))
         tmp_x.append(x)
