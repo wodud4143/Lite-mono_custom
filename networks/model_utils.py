@@ -46,20 +46,21 @@ class InvertedBottleneck(nn.Module):
 
         self.expand = nn.Sequential(
             nn.Conv2d(in_channels, hidden_dim, kernel_size=1, bias=False),
-            nn.BatchNorm2d(hidden_dim),
-            nn.ReLU6(inplace=True)
+            nn.BatchNorm2d(hidden_dim)
+            # nn.ReLU6(inplace=True)
         ) if expansion != 1 else nn.Identity()
 
         self.depthwise = nn.Sequential(
             nn.Conv2d(hidden_dim, hidden_dim, kernel_size=kernel_size, stride=stride, padding=(kernel_size//2)*dilation,
                       dilation=dilation, groups=hidden_dim, bias=False),
-            nn.BatchNorm2d(hidden_dim),
-            nn.ReLU6(inplace=True)
+            nn.BatchNorm2d(hidden_dim)
+            # nn.ReLU6(inplace=True)
         )
 
         self.project = nn.Sequential(
             nn.Conv2d(hidden_dim, out_channels, kernel_size=1, bias=False),
-            nn.BatchNorm2d(out_channels)
+            nn.BatchNorm2d(out_channels),
+            nn.ReLU6(inplace=True)
         )
 
         self.bn_act = bn_act
