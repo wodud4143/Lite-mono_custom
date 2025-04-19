@@ -10,6 +10,7 @@ import json
 
 import matplotlib.pyplot as plt
 
+from evaluate_depth import evaluate
 from utils import *
 from kitti_utils import *
 from layers import *
@@ -615,6 +616,10 @@ class Trainer:
         writer = self.writers[mode]
         for l, v in losses.items():
             writer.add_scalar("{}".format(l), v, self.step)
+        
+        #region Learning Rate
+        writer.add_scalar("LR/main", self.model_optimizer.param_groups[0]['lr'], self.step)
+        
 
         for j in range(min(4, self.opt.batch_size)):  # write a maxmimum of four images
             for s in self.opt.scales:
@@ -682,6 +687,12 @@ class Trainer:
         save_path = os.path.join(save_folder, "{}.pth".format("adam_pose"))
         if self.use_pose_net:
             torch.save(self.model_pose_optimizer.state_dict(), save_path)
+            
+        # region model evaluation
+        Weight_path = os.path.join(self.log_path, "models", "weights_{}".format(self.epoch))
+        mean_errors = evaluate(self.opt, weight_path=Weight_path)
+        for i, m in enumerate(["abs_rel", "sq_rel", "rmse", "rmse_log", "a1", "a2", "a3"]):
+            self.writers["val"].add_scalar("eval/{}".format(m), mean_errors[i], self.epoch)
 
     def load_pretrain(self):
         self.opt.mypretrain = os.path.expanduser(self.opt.mypretrain)

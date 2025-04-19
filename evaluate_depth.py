@@ -1,5 +1,6 @@
 from __future__ import absolute_import, division, print_function
 import os
+from pathlib import Path
 import cv2
 import numpy as np
 import torch
@@ -71,12 +72,16 @@ def batch_post_process_disparity(l_disp, r_disp):
     return r_mask * l_disp + l_mask * r_disp + (1.0 - l_mask - r_mask) * m_disp
 
 
-def evaluate(opt):
+def evaluate(opt,weight_path=None):
     """Evaluates a pretrained model using a specified test set
     """
     MIN_DEPTH = 1e-3
     MAX_DEPTH = 80
 
+    #add
+    if weight_path is not None:
+        opt.load_weights_folder = weight_path
+    
     if opt.ext_disp_to_eval is None:
 
         opt.load_weights_folder = os.path.expanduser(opt.load_weights_folder)
@@ -115,6 +120,7 @@ def evaluate(opt):
 
         pred_disps = []
 
+        
         print("-> Computing predictions with size {}x{}".format(
             encoder_dict['width'], encoder_dict['height']))
 
@@ -212,11 +218,17 @@ def evaluate(opt):
 
     mean_errors = np.array(errors).mean(0)
 
+    if weight_path is not None:
+        path = Path(opt.load_weights_folder)
+        filename = path.name
+        print(filename + "\n")
+    
     print("\n  " + ("{:>8} | " * 7).format("abs_rel", "sq_rel", "rmse", "rmse_log", "a1", "a2", "a3"))
     print(("&{: 8.3f}  " * 7).format(*mean_errors.tolist()) + "\\\\")
     print("\n  " + ("flops: {0}, params: {1}, flops_e: {2}, params_e:{3}, flops_d:{4}, params_d:{5}").format(flops, params, flops_e, params_e, flops_d, params_d))
     print("\n-> Done!")
 
+    return mean_errors
 
 if __name__ == "__main__":
     options = LiteMonoOptions()

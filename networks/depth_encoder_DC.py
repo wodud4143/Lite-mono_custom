@@ -424,13 +424,9 @@ class LiteMono(nn.Module):
         # )
         # region Stem1
         stem1 = nn.Sequential(
-            # DepthwiseSeparableConv(in_channels=in_chans, out_channels=self.dims[0], kernel_size=3, stride=2, dilation = 3, bn_act=True),
-            # DepthwiseSeparableConv(in_channels=self.dims[0], out_channels=self.dims[0], kernel_size=3, stride=1, dilation = 5,  bn_act=True),
-            # DepthwiseSeparableConv(in_channels=self.dims[0], out_channels=self.dims[0], kernel_size=3, stride=1, dilation = 7,  bn_act=True),
-            # InvertedBottleneck(in_channels=in_chans, out_channels=self.dims[0], expansion=3, kernel_size=3, stride = 2, dilation = 3),
-            Conv(in_chans, self.dims[0], kSize=3, stride=2, padding=1, bn_act=True),
-            InvertedBottleneck(in_channels=self.dims[0], out_channels=self.dims[0], expansion=2, kernel_size=3  ),
-            InvertedBottleneck(in_channels=self.dims[0], out_channels=self.dims[0], expansion=2, kernel_size=3 ),
+            DepthwiseSeparableConv(in_channels=in_chans, out_channels=self.dims[0], kernel_size=3, stride=2, bn_act=True),
+            DepthwiseSeparableConv(in_channels=self.dims[0], out_channels=self.dims[0], kernel_size=3, stride=1,  bn_act=True),
+            DepthwiseSeparableConv(in_channels=self.dims[0], out_channels=self.dims[0], kernel_size=3, stride=1, bn_act=True),
         )
 
         # self.stem2 = nn.Sequential(
@@ -438,16 +434,16 @@ class LiteMono(nn.Module):
         # )
         
         self.stem2 = nn.Sequential(
-            DepthwiseSeparableConv(in_channels = self.dims[0]+3, out_channels = self.dims[0], kernel_size=3, stride=2, bn_act=True), #bn_act=Flase
+            DepthwiseSeparableConv(in_channels = self.dims[0]+3, out_channels = self.dims[0], kernel_size=3, stride=2, bn_act= False), #bn_act=Flase
         )
 
 
         self.downsample_layers.append(stem1)
         
         # region add downsample
-        self.downsample = nn.Sequential(
-            DownsampleBlock(in_channels = 48)
-        )
+        # self.downsample = nn.Sequential(
+        #     DownsampleBlock(in_channels = 48)
+        # )
 
         self.input_downsample = nn.ModuleList()
         for i in range(1, 5):

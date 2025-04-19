@@ -31,7 +31,7 @@ def parse_args():
 
     parser.add_argument('--load_weights_folder', type=str,
                         help='path of a pretrained model to use',
-                        default=r'C:\Users\wodud\OneDrive\Desktop\Develop\Lite-Mono\lite-mono-8m_1024x320'
+                        default=r'C:\Users\wodud\OneDrive\Desktop\Lite-mono_custom\experiments\logs\Depth_wise\models\weights_49'
                         )
 
     parser.add_argument('--test',
@@ -50,7 +50,7 @@ def parse_args():
                             "lite-mono-8m"])
 
     parser.add_argument('--ext', type=str,
-                        help='image extension to search for in folder', default="png")
+                        help='image extension to search for in folder', default="jpg")
     parser.add_argument("--no_cuda",
                         help='if set, disables CUDA',
                         action='store_true')
@@ -103,7 +103,9 @@ def test_simple(args):
     '''
     # 하위 디렉토리 많을때
     '''
-    for image_folder in args.image_path:
+    # for image_folder in args.image_path:
+    image_folder = r"C:\Users\wodud\OneDrive\Desktop\sample\test2_DC"
+    if image_folder :
         # FINDING INPUT IMAGES
         if os.path.isfile(image_folder) and not args.test:
             # Only testing on a single image
@@ -313,44 +315,44 @@ def test_simple(args):
     # print('-> Done!')
     
 
-# def direct():
-
-#     directory = r"C:\Users\wodud\OneDrive\Desktop\Sample" 
-
-#     folders = [os.path.join(directory, f) for f in os.listdir(directory) if os.path.isdir(os.path.join(directory, f))]
-
-#     print("디렉토리 내 폴더 목록:")
-#     for folder in folders:
-#         print(folder)
-    
-#     return folders
-
 def direct():
-    gt_root = r"C:\Users\wodud\OneDrive\Desktop\data_depth_annotated"
-    rgb_root = r"C:\Users\wodud\OneDrive\Desktop\Develop\Lite-Mono\kitti_data"
-    target_cams = ["image_02", "image_03"]
-    image_dirs = set()
 
-    for split in ["train", "val"]:
-        split_path = os.path.join(gt_root, split)
-        if not os.path.exists(split_path):
-            continue
+    directory = r"C:\Users\wodud\OneDrive\Desktop\Sample" 
 
-        for drive in os.listdir(split_path):
-            drive_path = os.path.join(split_path, drive, "proj_depth", "groundtruth")
-            for cam in target_cams:
-                gt_dir = os.path.join(drive_path, cam)
-                if not os.path.exists(gt_dir):
-                    continue
+    folders = [os.path.join(directory, f) for f in os.listdir(directory) if os.path.isdir(os.path.join(directory, f))]
 
-                date = drive.split("_drive_")[0]
-                img_dir = os.path.join(rgb_root, date, drive, cam, "data")
-                if os.path.exists(img_dir):
-                    image_dirs.add(img_dir)
+    print("디렉토리 내 폴더 목록:")
+    for folder in folders:
+        print(folder)
+    
+    return folders
 
-    image_dirs = sorted(image_dirs)
-    print(f"[GT 기반 유효 디렉토리 수] {len(image_dirs)}개")
-    return image_dirs
+# def direct():
+#     gt_root = r"C:\Users\wodud\OneDrive\Desktop\data_depth_annotated"
+#     rgb_root = r"C:\Users\wodud\OneDrive\Desktop\Develop\Lite-Mono\kitti_data"
+#     target_cams = ["image_02", "image_03"]
+#     image_dirs = set()
+
+#     for split in ["train", "val"]:
+#         split_path = os.path.join(gt_root, split)
+#         if not os.path.exists(split_path):
+#             continue
+
+#         for drive in os.listdir(split_path):
+#             drive_path = os.path.join(split_path, drive, "proj_depth", "groundtruth")
+#             for cam in target_cams:
+#                 gt_dir = os.path.join(drive_path, cam)
+#                 if not os.path.exists(gt_dir):
+#                     continue
+
+#                 date = drive.split("_drive_")[0]
+#                 img_dir = os.path.join(rgb_root, date, drive, cam, "data")
+#                 if os.path.exists(img_dir):
+#                     image_dirs.add(img_dir)
+
+#     image_dirs = sorted(image_dirs)
+#     print(f"[GT 기반 유효 디렉토리 수] {len(image_dirs)}개")
+#     return image_dirs
 
 
 

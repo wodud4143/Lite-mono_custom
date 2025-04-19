@@ -23,16 +23,16 @@ class DepthwiseSeparableConv(nn.Module):
         self.bn_act = bn_act
         
         if self.bn_act:
-            # self.bn_gelu = BNGELU(out_channels)
-            self.bn_relu = BNRELU(out_channels)
+            self.bn_gelu = BNGELU(out_channels)
+            # self.bn_relu = BNRELU(out_channels)
             
 
     def forward(self, x):
         x = self.depthwise(x)
         x = self.pointwise(x)
         if self.bn_act:
-            # x = self.bn_gelu(x)
-            x = self.bn_relu(x)
+            x = self.bn_gelu(x)
+            # x = self.bn_relu(x)
         
         return x
     
