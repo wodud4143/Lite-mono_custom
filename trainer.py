@@ -319,7 +319,7 @@ class Trainer:
 
         return outputs, losses
     
-
+    #region * predict_poses 
     def predict_poses(self, inputs, features):
         """Predict poses between input frames for monocular sequences.
         """
@@ -452,6 +452,8 @@ class Trainer:
                 if not self.opt.disable_automasking:
                     outputs[("color_identity", frame_id, scale)] = \
                         inputs[("color", frame_id, source_scale)]
+                        
+            
 
     def compute_reprojection_loss(self, pred, target):
         """Computes reprojection loss between a batch of predicted and target images

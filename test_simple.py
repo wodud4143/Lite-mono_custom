@@ -13,10 +13,13 @@ import torch
 from torchvision import transforms, datasets
 
 import networks
-from layers import disp_to_depth
+from layers import disp_to_depth, transformation_from_parameters
 import cv2
 import heapq
 from PIL import ImageFile
+
+import torch.nn.functional as F
+from options import LiteMonoOptions
 ImageFile.LOAD_TRUNCATED_IMAGES = True
 
 
@@ -26,22 +29,20 @@ def parse_args():
 
     parser.add_argument('--image_path', type=str, nargs='+',
                         help='path to a test image or folder of images',
-                        default= direct()
+                        default= r"C:\Users\wodud\OneDrive\Desktop\sample\test2_NO_dil\frame_00375.jpg" #direct()
                         )# required=True
 
     parser.add_argument('--load_weights_folder', type=str,
                         help='path of a pretrained model to use',
-                        default=r'C:\Users\wodud\OneDrive\Desktop\Lite-mono_custom\experiments\logs\Depth_wise\models\weights_49'
+                        default=r'C:\Users\wodud\OneDrive\Desktop\Lite-mono_custom\experiments\logs\Decoder_no_mqa\models\weights_49'
                         )
 
     parser.add_argument('--test',
                         action='store_true',
                         help='if set, read images from a .txt file',
-                        # default=r'splits\eigen\test_files.txt'
                         )
 
     parser.add_argument('--model', type=str,
-                        help='name of a pretrained model to use',
                         default="lite-mono", #lite-mono
                         choices=[
                             "lite-mono",
@@ -50,12 +51,14 @@ def parse_args():
                             "lite-mono-8m"])
 
     parser.add_argument('--ext', type=str,
-                        help='image extension to search for in folder', default="jpg")
+                        help='image extension to search for in folder', default="png")
     parser.add_argument("--no_cuda",
                         help='if set, disables CUDA',
                         action='store_true')
 
     return parser.parse_args()
+
+
 
 
 def test_simple(args):
@@ -104,7 +107,7 @@ def test_simple(args):
     # 하위 디렉토리 많을때
     '''
     # for image_folder in args.image_path:
-    image_folder = r"C:\Users\wodud\OneDrive\Desktop\sample\test2_DC"
+    image_folder = r"C:\Users\wodud\OneDrive\Desktop\sample\KITTI_BT"
     if image_folder :
         # FINDING INPUT IMAGES
         if os.path.isfile(image_folder) and not args.test:
@@ -171,6 +174,7 @@ def test_simple(args):
                 input_image = input_image.to(device)
                 features = encoder(input_image)
                 outputs = depth_decoder(features)
+                
 
                 disp = outputs[("disp", 0)]
 
@@ -326,34 +330,6 @@ def direct():
         print(folder)
     
     return folders
-
-# def direct():
-#     gt_root = r"C:\Users\wodud\OneDrive\Desktop\data_depth_annotated"
-#     rgb_root = r"C:\Users\wodud\OneDrive\Desktop\Develop\Lite-Mono\kitti_data"
-#     target_cams = ["image_02", "image_03"]
-#     image_dirs = set()
-
-#     for split in ["train", "val"]:
-#         split_path = os.path.join(gt_root, split)
-#         if not os.path.exists(split_path):
-#             continue
-
-#         for drive in os.listdir(split_path):
-#             drive_path = os.path.join(split_path, drive, "proj_depth", "groundtruth")
-#             for cam in target_cams:
-#                 gt_dir = os.path.join(drive_path, cam)
-#                 if not os.path.exists(gt_dir):
-#                     continue
-
-#                 date = drive.split("_drive_")[0]
-#                 img_dir = os.path.join(rgb_root, date, drive, cam, "data")
-#                 if os.path.exists(img_dir):
-#                     image_dirs.add(img_dir)
-
-#     image_dirs = sorted(image_dirs)
-#     print(f"[GT 기반 유효 디렉토리 수] {len(image_dirs)}개")
-#     return image_dirs
-
 
 
 if __name__ == '__main__':

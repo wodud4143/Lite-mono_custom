@@ -37,7 +37,30 @@ class DepthwiseSeparableConv(nn.Module):
         return x
     
 
-
+class CustomGhostModule(nn.Module):
+    def __init__(self, exp, in_channels, mid_channels):
+        super().__init__()
+        self.exp = exp
+        self.in_channels = in_channels
+        self.mid_channels = mid_channels
+        
+        self.primary_conv = nn.Sequential(
+            nn.Conv2d(self.in_channels, mid_channels, kernel_size=1, stride=1, padding=0, bias=False),
+            nn.BatchNorm2d(mid_channels, eps=1e-3, momentum=0.999)
+        )
+        
+        self.depthwise_conv = nn.Sequential(
+            nn.Conv2d(mid_channels, mid_channels * (self.exp - 1), kernel_size=3, stride=1, padding=1, groups=mid_channels, bias=False),
+            nn.BatchNorm2d(mid_channels * (self.exp - 1), eps=1e-3, momentum=0.999)
+        )
+        
+    def forward(self, x):
+        x_primary = self.primary_conv(x)
+        x_depthwise = self.depthwise_conv(x_primary)
+        out = torch.cat([x_primary, x_depthwise], dim=1)
+        return out
+        
+        
 class InvertedBottleneck(nn.Module):
     def __init__(self, in_channels, out_channels, expansion=6, kernel_size=3, stride=1, dilation=1, bn_act=False):
         super().__init__()

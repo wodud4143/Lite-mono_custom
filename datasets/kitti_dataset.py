@@ -37,7 +37,9 @@ class KITTIDataset(MonoDataset):
 
     def get_color(self, folder, frame_index, side, do_flip):
         color = self.loader(self.get_image_path(folder, frame_index, side))
-
+        # # Aspect Ratio 수정 
+        # resized_color = color.resize(size=(1170 , 658))
+        # color = resized_color
         if do_flip:
             color = color.transpose(pil.FLIP_LEFT_RIGHT)
 

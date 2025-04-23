@@ -26,7 +26,7 @@ class LiteMonoOptions:
         self.parser.add_argument("--model_name",
                                  type=str,
                                  help="the name of the folder to save the model in",
-                                 default="no_dilation")
+                                 default="Ghost_module")
         self.parser.add_argument("--split",
                                  type=str,
                                  help="which training split to use",
@@ -162,7 +162,7 @@ class LiteMonoOptions:
         self.parser.add_argument("--num_workers",
                                  type=int,
                                  help="number of dataloader workers",
-                                 default=12)
+                                 default=1)
 
         # LOADING options
         self.parser.add_argument("--load_weights_folder",
