@@ -3125,3 +3125,4 @@ epoch  48 | lr 0.000037 |lr_p 0.000040 | batch   1744 | examples/s:  37.0 | loss
 epoch  48 | lr 0.000037 |lr_p 0.000040 | batch   3744 | examples/s:  34.8 | loss: 0.05857 | time elapsed: 22h28m46s | time left: 00h33m43s
 epoch  49 | lr 0.000033 |lr_p 0.000036 | batch    947 | examples/s:  33.6 | loss: 0.08478 | time elapsed: 22h40m52s | time left: 00h22m12s
 epoch  49 | lr 0.000033 |lr_p 0.000036 | batch   2947 | examples/s:  37.0 | loss: 0.06563 | time elapsed: 22h51m28s | time left: 00h10m39s
+epoch   0 | lr 0.000100 |lr_p 0.000100 | batch      0 | examples/s:   0.0 | loss: 0.18638 | time elapsed: 00h44m46s | time left: 00h00m00s

@@ -54,6 +54,7 @@ class CustomGhostModule(nn.Module):
             nn.BatchNorm2d(mid_channels * (self.exp - 1), eps=1e-3, momentum=0.999)
         )
         
+        
     def forward(self, x):
         x_primary = self.primary_conv(x)
         x_depthwise = self.depthwise_conv(x_primary)

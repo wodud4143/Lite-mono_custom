@@ -237,7 +237,18 @@ class DilatedConv(nn.Module):
         self.gamma = nn.Parameter(layer_scale_init_value * torch.ones(dim),
                                   requires_grad=True) if layer_scale_init_value > 0 else None
         self.drop_path = DropPath(drop_path) if drop_path > 0. else nn.Identity()
-
+        
+        # region added
+        self.primary_conv = nn.Sequential(
+            nn.Conv2d(dim, (expan_ratio * dim)//2, kernel_size=1, stride=1, padding=0, bias=False),
+            nn.BatchNorm2d((expan_ratio * dim)//2, eps=1e-3, momentum=0.999)
+        )
+        self.depthwise_conv = nn.Sequential(
+            nn.Conv2d((expan_ratio * dim)//2, (expan_ratio * dim)//2, kernel_size=3, stride=1, padding=1, groups=(expan_ratio * dim)//2, bias=False),
+            nn.BatchNorm2d((expan_ratio * dim)//2, eps=1e-3, momentum=0.999)
+        )
+        
+         
 
     def forward(self, x):
         input = x
@@ -245,18 +256,15 @@ class DilatedConv(nn.Module):
         x = self.ddwconv(x)
         x = self.bn1(x)
 
-        x = x.permute(0, 2, 3, 1)  # (N, C, H, W) -> (N, H, W, C)
-        x = self.pwconv1(x)
+        # x = x.permute(0, 2, 3, 1)  # (N, C, H, W) -> (N, H, W, C)
+        # x = self.pwconv1(x)
         
-        # x1 = self.ddwconv(x)
-        # x1 = self.bn1(x1)
-
-        # x2 = x1.permute(0, 2, 3, 1)  # (N, C, H, W) -> (N, H, W, C)
-        # x2 = self.pwconv1(x2)
-        # """------------ Applying Customized Ghost Moudle ------------"""
-        # x2 = x2.permute(0, 3, 1, 2)
-        # x = torch.cat([x1, x2], dim=1)
-        # """------------------------------------------------"""
+        """------------ Applying Customized Ghost Moudle ------------"""
+        x1 = self.primary_conv(x)
+        x2 = self.depthwise_conv(x1)
+        x= torch.cat([x1, x2], dim=1)
+        x = x.permute(0, 2, 3, 1)
+        """----------------------------------------------------------"""
         x = self.act(x)
         x = self.pwconv2(x)
         if self.gamma is not None:
@@ -471,7 +479,7 @@ class LiteMono(nn.Module):
         #     nn.BatchNorm2d(mid_channels * (self.exp - 1), eps=1e-3, momentum=0.999)
         # )
         
-        self.custom_ghostmodule = CustomGhostModule(exp=4,in_channels=self.dims[0],mid_channels=self.dims[0]//4)
+        self.custom_ghostmodule = CustomGhostModule(exp=2,in_channels=self.dims[0],mid_channels=self.dims[0]//2)
         """ ----------------------------------- """
         self.input_downsample = nn.ModuleList()
         for i in range(1, 5):
