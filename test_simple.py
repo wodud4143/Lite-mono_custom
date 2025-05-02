@@ -34,7 +34,7 @@ def parse_args():
 
     parser.add_argument('--load_weights_folder', type=str,
                         help='path of a pretrained model to use',
-                        default=r'C:\Users\wodud\OneDrive\Desktop\Lite-mono_custom\experiments\logs\Decoder_no_mqa\models\weights_49'
+                        default=r'C:\Users\wodud\OneDrive\Desktop\Lite-mono_custom\experiments\logs\Ghost_module_full\models\weights_49'
                         )
 
     parser.add_argument('--test',
@@ -72,7 +72,7 @@ def test_simple(args):
     else:
         device = torch.device("cpu")
 
-    print("-> Loading model from ", args.load_weights_folder)
+    print("-> Loading model from ", device, args.load_weights_folder)
     encoder_path = os.path.join(args.load_weights_folder, "encoder.pth")
     decoder_path = os.path.join(args.load_weights_folder, "depth.pth")
 
@@ -107,7 +107,7 @@ def test_simple(args):
     # 하위 디렉토리 많을때
     '''
     # for image_folder in args.image_path:
-    image_folder = r"C:\Users\wodud\OneDrive\Desktop\sample\KITTI_BT"
+    image_folder = r"C:\Users\wodud\OneDrive\Desktop\도로주행 데이터\ghost_full_16\2011_09_26_drive_0009_sync_학습함"
     if image_folder :
         # FINDING INPUT IMAGES
         if os.path.isfile(image_folder) and not args.test:

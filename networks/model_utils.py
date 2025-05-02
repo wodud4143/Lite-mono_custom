@@ -58,6 +58,10 @@ class CustomGhostModule(nn.Module):
         x_primary = self.primary_conv(x)
         x_depthwise = self.depthwise_conv(x_primary)
         out = torch.cat([x_primary, x_depthwise], dim=1)
+        # x_primary = self.primary_conv(out)
+        # x_depthwise = self.depthwise_conv(x_primary)
+        # out = torch.cat([x_primary, x_depthwise], dim=1)
+        
         return out
         
         

@@ -208,7 +208,7 @@ class CDilated(nn.Module):
         output = self.conv(input)
         return output
 
-
+# region - * Dilated
 class DilatedConv(nn.Module):
     """
     A single Dilated Convolution layer in the Consecutive Dilated Convolutions (CDC) module.
@@ -233,9 +233,11 @@ class DilatedConv(nn.Module):
         self.pwconv1 = nn.Linear(dim, expan_ratio * dim)
         self.act = nn.GELU()
         self.pwconv2 = nn.Linear(expan_ratio * dim, dim)
+        # self.pwconv2 = nn.Linear(7 * dim, dim)
         self.gamma = nn.Parameter(layer_scale_init_value * torch.ones(dim),
                                   requires_grad=True) if layer_scale_init_value > 0 else None
         self.drop_path = DropPath(drop_path) if drop_path > 0. else nn.Identity()
+
 
     def forward(self, x):
         input = x
@@ -245,10 +247,21 @@ class DilatedConv(nn.Module):
 
         x = x.permute(0, 2, 3, 1)  # (N, C, H, W) -> (N, H, W, C)
         x = self.pwconv1(x)
+        
+        # x1 = self.ddwconv(x)
+        # x1 = self.bn1(x1)
+
+        # x2 = x1.permute(0, 2, 3, 1)  # (N, C, H, W) -> (N, H, W, C)
+        # x2 = self.pwconv1(x2)
+        # """------------ Applying Customized Ghost Moudle ------------"""
+        # x2 = x2.permute(0, 3, 1, 2)
+        # x = torch.cat([x1, x2], dim=1)
+        # """------------------------------------------------"""
         x = self.act(x)
         x = self.pwconv2(x)
         if self.gamma is not None:
             x = self.gamma * x
+            
         x = x.permute(0, 3, 1, 2)  # (N, H, W, C) -> (N, C, H, W)
 
         x = input + self.drop_path(x)
@@ -290,6 +303,7 @@ class LGFI(nn.Module):
                                   requires_grad=True) if layer_scale_init_value > 0 else None
         self.drop_path = DropPath(drop_path) if drop_path > 0. else nn.Identity()
 
+
     def forward(self, x):
         # Input resolution: 192 x 640
         # Stage 2: (48 x 160)
@@ -329,7 +343,6 @@ class LGFI(nn.Module):
         #     x = x_mqa
         x = x + self.gamma_xca * self.xca(self.norm_xca(x))
         
-           
         x = x.reshape(B, H, W, C)
         # # feature fusion
         # if HW != 7680:
@@ -457,6 +470,7 @@ class LiteMono(nn.Module):
         #     nn.Conv2d(mid_channels, mid_channels * (self.exp - 1), kernel_size=3, stride=1, padding=1, groups=mid_channels, bias=False),
         #     nn.BatchNorm2d(mid_channels * (self.exp - 1), eps=1e-3, momentum=0.999)
         # )
+        
         self.custom_ghostmodule = CustomGhostModule(exp=4,in_channels=self.dims[0],mid_channels=self.dims[0]//4)
         """ ----------------------------------- """
         self.input_downsample = nn.ModuleList()
@@ -526,11 +540,7 @@ class LiteMono(nn.Module):
         tmp_x = []
         x = self.downsample_layers[0](x)
         
-  
         """ ------- Ghost Moudel ------- """
-        # x_primary = self.primary_conv(x)
-        # x_depthwise = self.depthwise_conv(x_primary)
-        # x = torch.cat([x_primary, x_depthwise], dim=1)
         x = self.custom_ghostmodule(x)
         """ ---------------------------- """
         
