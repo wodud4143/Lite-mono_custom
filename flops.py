@@ -1,15 +1,14 @@
 import torch
 from thop import profile, clever_format
-from networks.depth_encoder import LiteMono
-from networks.depth_decoder import DepthDecoder
+import networks
 
 def calculate_flops(model_name="lite-mono", height=192, width=640, device="cuda"):
 
     x = torch.randn(1, 3, height, width).to(device)
 
 
-    encoder = LiteMono(model=model_name, height=height, width=width).to(device)
-    decoder = DepthDecoder(encoder.num_ch_enc, scales=range(3)).to(device)
+    encoder = networks.LiteMono(model=model_name, height=height, width=width).to(device)
+    decoder = networks.DepthDecoder(encoder.num_ch_enc, scales=range(3)).to(device)
 
     with torch.no_grad():
         features = encoder(x)
