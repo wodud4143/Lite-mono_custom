@@ -5,7 +5,7 @@ import torch.nn.functional as F
 from timm.models.layers import DropPath
 import math
 import torch.cuda
-from .model_utils import Conv, DepthwiseSeparableConv,InvertedBottleneck,CustomGhostModule
+from .model_utils import Conv, DepthwiseSeparableConv,InvertedBottleneck,CustomGhostModule,CoordAtt
 
 
 
@@ -441,49 +441,25 @@ class LiteMono(nn.Module):
             assert g in ['None', 'LGFI']
 
         self.downsample_layers = nn.ModuleList()  # stem and 3 intermediate downsampling conv layers
-        # stem1 = nn.Sequential(
-        #     Conv(in_chans, self.dims[0], kSize=3, stride=2, padding=1, bn_act=True),
-        #     Conv(self.dims[0], self.dims[0], kSize=3, stride=1, padding=1, bn_act=True),
-        #     Conv(self.dims[0], self.dims[0], kSize=3, stride=1, padding=1, bn_act=True),
-        # )
+
         # region Stem1
         stem1 = nn.Sequential(
-            # DepthwiseSeparableConv(in_channels=in_chans, out_channels=self.dims[0], kernel_size=3, stride=2, dilation = 3, bn_act=True),
-            # DepthwiseSeparableConv(in_channels=self.dims[0], out_channels=self.dims[0], kernel_size=3, stride=1, dilation = 5,  bn_act=True),
-            # DepthwiseSeparableConv(in_channels=self.dims[0], out_channels=self.dims[0], kernel_size=3, stride=1, dilation = 7,  bn_act=True),
-            # InvertedBottleneck(in_channels=in_chans, out_channels=self.dims[0], expansion=3, kernel_size=3, stride = 2, dilation = 3),
             Conv(in_chans, self.dims[0], kSize=3, stride=2, padding=1, bn_act=True),
             InvertedBottleneck(in_channels=self.dims[0], out_channels=self.dims[0], expansion=2, kernel_size=3 ),
             InvertedBottleneck(in_channels=self.dims[0], out_channels=self.dims[0], expansion=2, kernel_size=3 ),
         )
-
-        # self.stem2 = nn.Sequential(
-        #     Conv(self.dims[0]+3, self.dims[0], kSize=3, stride=2, padding=1, bn_act=False),
-        # )
         
+        # region Stem2
         self.stem2 = nn.Sequential(
             DepthwiseSeparableConv(in_channels = self.dims[0]+3, out_channels = self.dims[0], kernel_size=3, stride=2, bn_act=True), #bn_act=Flase
         )
+        
+        self.cooratt = CoordAtt(self.dims[0],self.dims[0])
 
 
         self.downsample_layers.append(stem1)
         
       
-        """ ------- Ghost module added ------- """
-        # mid_channels = self.dims[0] // 4
-        
-        # self.primary_conv = nn.Sequential(
-        #     nn.Conv2d(self.dims[0], mid_channels, kernel_size=1, stride=1, padding=0, bias=False),
-        #     nn.BatchNorm2d(mid_channels, eps=1e-3, momentum=0.999)
-        # )
-        
-        # self.depthwise_conv = nn.Sequential(
-        #     nn.Conv2d(mid_channels, mid_channels * (self.exp - 1), kernel_size=3, stride=1, padding=1, groups=mid_channels, bias=False),
-        #     nn.BatchNorm2d(mid_channels * (self.exp - 1), eps=1e-3, momentum=0.999)
-        # )
-        
-        # self.custom_ghostmodule = CustomGhostModule(exp=4,in_channels=self.dims[0],mid_channels=self.dims[0]//4)
-        """ ----------------------------------- """
         self.input_downsample = nn.ModuleList()
         for i in range(1, 5):
             self.input_downsample.append(AvgPool(i))
@@ -498,7 +474,7 @@ class LiteMono(nn.Module):
             )
             self.downsample_layers.append(downsample_layer)
         
-        # ------------------------------ Stage 시작 ------------------------------ 
+        # region Start_Stage
         self.stages = nn.ModuleList()
         dp_rates = [x.item() for x in torch.linspace(0, drop_path_rate, sum(self.depth))]
         cur = 0
@@ -551,6 +527,7 @@ class LiteMono(nn.Module):
         tmp_x = []
         x = self.downsample_layers[0](x)
         """---------------- applying ca block to x -------------------"""
+        x = self.cooratt(x)
         """-----------------------------------------------------------"""
         x = self.stem2(torch.cat((x, x_down[0]), dim=1))
         tmp_x.append(x)
