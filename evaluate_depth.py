@@ -235,7 +235,7 @@ def evaluate(opt,weight_path=None):
 
 def direct():
 
-    directory = r"C:\Users\wodud\OneDrive\Desktop\Lite-mono_custom\experiments\logs\CDC_to_Ghost_exp_2\models" 
+    directory = r"C:\Users\wodud\OneDrive\Desktop\Lite-mono_custom\experiments\logs\Ghost_Cooratt_50ep\models" 
 
     folders = [os.path.join(directory, f) for f in os.listdir(directory) if os.path.isdir(os.path.join(directory, f))]
 

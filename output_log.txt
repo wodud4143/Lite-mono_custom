@@ -34,3 +34,4 @@ epoch   0 | lr 0.000100 |lr_p 0.000100 | batch   3750 | examples/s:  37.5 | loss
 epoch   0 | lr 0.000100 |lr_p 0.000100 | batch   4000 | examples/s:  36.8 | loss: 0.10552 | time elapsed: 00h17m52s | time left: 35h26m37s
 epoch   0 | lr 0.000100 |lr_p 0.000100 | batch   4250 | examples/s:  33.6 | loss: 0.09222 | time elapsed: 00h18m54s | time left: 35h15m34s
 epoch   0 | lr 0.000100 |lr_p 0.000100 | batch   4500 | examples/s:  26.4 | loss: 0.11770 | time elapsed: 00h19m58s | time left: 35h08m32s
+epoch   0 | lr 0.000100 |lr_p 0.000100 | batch      0 | examples/s:   0.0 | loss: 0.15331 | time elapsed: 00h05m25s | time left: 00h00m00s
