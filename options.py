@@ -26,7 +26,7 @@ class LiteMonoOptions:
         self.parser.add_argument("--model_name",
                                  type=str,
                                  help="the name of the folder to save the model in",
-                                 default="test100")
+                                 default="Ghost_CDC_Asymm_ep100")
         self.parser.add_argument("--split",
                                  type=str,
                                  help="which training split to use",

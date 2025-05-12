@@ -5,7 +5,7 @@ import torch.nn.functional as F
 from timm.models.layers import DropPath
 import math
 import torch.cuda
-from .model_utils import Conv, DepthwiseSeparableConv,InvertedBottleneck,CustomGhostModule,CoordAtt
+from .model_utils import Conv, DepthwiseSeparableConv,InvertedBottleneck,CustomGhostModule,CoordAtt,AsymmBottleneck
 
 
 
@@ -110,51 +110,6 @@ class XCA(nn.Module):
     @torch.jit.ignore
     def no_weight_decay(self):
         return {'temperature'}
-
-
-
-# region - MQA
-class MultiQueryAttentionLayerV2(nn.Module):
-    """Multi Query Attention in PyTorch."""
-    
-    def __init__(self, num_heads, key_dim, value_dim, dropout=0.0):
-        super().__init__()
-        self.num_heads = num_heads
-        self.key_dim = key_dim
-        self.value_dim = value_dim
-        self.dropout = dropout
-        
-        self.query_proj = nn.Parameter(torch.randn(num_heads, key_dim, key_dim))
-        self.key_proj = nn.Parameter(torch.randn(key_dim, key_dim))
-        self.value_proj = nn.Parameter(torch.randn(key_dim, value_dim))
-        self.output_proj = nn.Parameter(torch.randn(key_dim, num_heads, value_dim))
-        
-        self.dropout_layer = nn.Dropout(p=dropout)
-    
-    def _reshape_input(self, t):
-        """Reshapes a tensor to three dimensions, keeping the first and last."""
-        batch_size, *spatial_dims, channels = t.shape
-        num = torch.prod(torch.tensor(spatial_dims))
-        return t.view(batch_size, num, channels)
-    
-    def forward(self, x, m):
-        """Run layer computation."""
-        reshaped_x = self._reshape_input(x)
-        reshaped_m = self._reshape_input(m)
-
-        q = torch.einsum('bnd,hkd->bnhk', reshaped_x, self.query_proj)
-        k = torch.einsum('bmd,dk->bmk', reshaped_m, self.key_proj)
-
-        logits = torch.einsum('bnhk,bmk->bnhm', q, k)
-
-        logits = logits / (self.key_dim ** 0.5)
-        attention_scores = self.dropout_layer(F.softmax(logits, dim=-1))
-
-        v = torch.einsum('bmd,dv->bmv', reshaped_m, self.value_proj)
-        o = torch.einsum('bnhm,bmv->bnhv', attention_scores, v)
-        result = torch.einsum('bnhv,dhv->bnd', o, self.output_proj)
-
-        return result.view_as(x)
 
 
 
@@ -313,7 +268,7 @@ class LGFI(nn.Module):
         self.gamma = nn.Parameter(layer_scale_init_value * torch.ones((self.dim)),
                                   requires_grad=True) if layer_scale_init_value > 0 else None
         self.drop_path = DropPath(drop_path) if drop_path > 0. else nn.Identity()
-
+        self.asymmbottleneck = AsymmBottleneck(self.dim,self.dim * expan_ratio, self.dim, kernel_size=3)
 
     def forward(self, x):
         # Input resolution: 192 x 640
@@ -334,13 +289,21 @@ class LGFI(nn.Module):
 
         x = x + self.gamma_xca * self.xca(self.norm_xca(x))
         
-        x = x.reshape(B, H, W, C)
+        # x = x.reshape(B, H, W, C)
 
-        # Inverted Bottleneck
-        x = self.norm(x)
-        x = self.pwconv1(x)
-        x = self.act(x)
-        x = self.pwconv2(x)
+        # # Inverted Bottleneck
+        # x = self.norm(x)
+        # x = self.pwconv1(x)
+        # x = self.act(x)
+        # x = self.pwconv2(x)
+        
+        """  Asymm Bottleneck  """
+        x = x.reshape(B, C ,H, W)
+        x = self.asymmbottleneck(x)
+        x = x.permute(0, 2, 3, 1)
+        """--------------------"""
+        
+        
         if self.gamma is not None:
             x = self.gamma * x
         x = x.permute(0, 3, 1, 2)  # (N, H, W, C) -> (N, C, H, W)
@@ -425,12 +388,12 @@ class LiteMono(nn.Module):
             InvertedBottleneck(in_channels=self.dims[0], out_channels=self.dims[0], expansion=2, kernel_size=3 ),
         )
         
+        
         # region Stem2
         self.stem2 = nn.Sequential(
             DepthwiseSeparableConv(in_channels = self.dims[0]+3, out_channels = self.dims[0], kernel_size=3, stride=2, bn_act=True), #bn_act=Flase
         )
         
-        self.cooratt = CoordAtt(self.dims[0],self.dims[0])
 
 
         self.downsample_layers.append(stem1)
@@ -498,13 +461,10 @@ class LiteMono(nn.Module):
         x_down = []
         for i in range(4):
             x_down.append(self.input_downsample[i](x))
-        
 
         tmp_x = []
         x = self.downsample_layers[0](x)
-        """---------------- applying ca block to x -------------------"""
-        x = self.cooratt(x)
-        """-----------------------------------------------------------"""
+
         x = self.stem2(torch.cat((x, x_down[0]), dim=1))
         tmp_x.append(x)
 

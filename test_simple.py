@@ -34,7 +34,7 @@ def parse_args():
 
     parser.add_argument('--load_weights_folder', type=str,
                         help='path of a pretrained model to use',
-                        default=r'C:\Users\wodud\OneDrive\Desktop\Lite-mono_custom\experiments\logs\Ghost_module_half_no\models\weights_47'
+                        default=r'C:\Users\wodud\OneDrive\Desktop\Lite-mono_custom\experiments\logs\Ghost_module_half_no\models\weights_93'
                         )
 
     parser.add_argument('--test',
