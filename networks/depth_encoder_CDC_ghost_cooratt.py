@@ -247,6 +247,7 @@ class DilatedConv(nn.Module):
             nn.Conv2d((expan_ratio * dim)//2, (expan_ratio * dim)//2, kernel_size=3, stride=1, padding=1, groups=(expan_ratio * dim)//2, bias=False),
             nn.BatchNorm2d((expan_ratio * dim)//2, eps=1e-3, momentum=0.999)
         )
+        self.cooratt = CoordAtt(expan_ratio * dim, expan_ratio * dim)
         
          
 
@@ -264,10 +265,12 @@ class DilatedConv(nn.Module):
         x1 = self.primary_conv(x)
         x2 = self.depthwise_conv(x1)
         x= torch.cat([x1, x2], dim=1)
-        x = x.permute(0, 2, 3, 1)
-        """----------------------------------------------------------"""
         
-
+        """----------------------------------------------------------"""
+        """-----------------------Applying CoordiAtt-----------------"""
+        x = self.cooratt(x)
+        """----------------------------------------------------------"""
+        x = x.permute(0, 2, 3, 1)
         x = self.act(x)
         x = self.pwconv2(x)
         if self.gamma is not None:
@@ -430,7 +433,7 @@ class LiteMono(nn.Module):
             DepthwiseSeparableConv(in_channels = self.dims[0]+3, out_channels = self.dims[0], kernel_size=3, stride=2, bn_act=True), #bn_act=Flase
         )
         
-        self.cooratt = CoordAtt(self.dims[0],self.dims[0])
+        
 
 
         self.downsample_layers.append(stem1)
@@ -504,7 +507,7 @@ class LiteMono(nn.Module):
         tmp_x = []
         x = self.downsample_layers[0](x)
         """---------------- applying ca block to x -------------------"""
-        x = self.cooratt(x)
+        
         """-----------------------------------------------------------"""
         x = self.stem2(torch.cat((x, x_down[0]), dim=1))
         tmp_x.append(x)

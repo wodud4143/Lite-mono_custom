@@ -1,4 +1,4 @@
 from .resnet_encoder import ResnetEncoder
 from .pose_decoder import PoseDecoder
 from .depth_decoder import DepthDecoder
-from .depth_encoder_only_ghostinCDC_Asymmnet import LiteMono
+from .depth_encoder_CDC_ghost_cooratt import LiteMono

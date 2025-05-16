@@ -233,20 +233,8 @@ def evaluate(opt,weight_path=None):
         # return mean_errors
 
 
-def direct():
-
-    directory = r"C:\Users\wodud\OneDrive\Desktop\Lite-mono_custom\experiments\logs\Ghost_Cooratt_50ep\models" 
-
-    folders = [os.path.join(directory, f) for f in os.listdir(directory) if os.path.isdir(os.path.join(directory, f))]
-
-    print("디렉토리 내 폴더 목록:")
-    for folder in folders:
-        print(folder)
-    
-    return folders
-
 if __name__ == "__main__":
     options = LiteMonoOptions()
-    weightPath = direct()
+    weightPath = r"C:\Users\wodud\OneDrive\Desktop\Lite-mono_custom\lite-mono_640x192"
     evaluate(options.parse(),weightPath)
     
