@@ -81,7 +81,8 @@ Click on the links in the '--model' column to download a trained model.
 ## Evaluation
     python evaluate_depth.py --load_weights_folder path/to/your/weights/folder --data_path path/to/kitti_data/ --model lite-mono
 
-
+## Weight
+    https://drive.google.com/drive/folders/1N3y-N7eQG_OyoadZlVz-gB6nC652VtWj?usp=drive_link
 ## Training
 #### dependency installation 
     pip install 'git+https://github.com/saadnaeem-dev/pytorch-linear-warmup-cosine-annealing-warm-restarts-weight-decay'
