@@ -34,7 +34,7 @@ def parse_args():
 
     parser.add_argument('--load_weights_folder', type=str,
                         help='path of a pretrained model to use',
-                        default=r'C:\Users\wodud\OneDrive\Desktop\Lite-mono_custom\experiments\logs\Ghost_Only_CDC_100ep\models\weights_93'
+                        default=r'C:\Users\wodud\OneDrive\Desktop\Lite-mono_custom\experiments\logs\Ghost_CDC_Asymm_ep100\models\weights_99'
                         )
 
     parser.add_argument('--test',
@@ -107,7 +107,7 @@ def test_simple(args):
     # 하위 디렉토리 많을때
     '''
     for image_folder in args.image_path:
-    # image_folder = r"C:\Users\wodud\OneDrive\Desktop\도로주행 데이터\ghost_full_16\2011_09_26_drive_0009_sync_학습함"
+    # image_folder = r"C:\Users\wodud\OneDrive\Desktop\sample\Bottleneck_KITTI"
         if image_folder :
             # FINDING INPUT IMAGES
             if os.path.isfile(image_folder) and not args.test:
@@ -321,7 +321,7 @@ def test_simple(args):
 
 def direct():
 
-    directory = r"C:\Users\wodud\OneDrive\Desktop\도로주행 데이터\Ghostonlycdc_ep100" 
+    directory = r"C:\Users\wodud\OneDrive\Desktop\도로주행 데이터\Ghost_CDC_Asymm_ep100" 
 
     folders = [os.path.join(directory, f) for f in os.listdir(directory) if os.path.isdir(os.path.join(directory, f))]
 

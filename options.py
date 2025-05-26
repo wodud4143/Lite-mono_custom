@@ -26,7 +26,7 @@ class LiteMonoOptions:
         self.parser.add_argument("--model_name",
                                  type=str,
                                  help="the name of the folder to save the model in",
-                                 default="Ghost_Cooratt_100ep")
+                                 default="Ghost_CDC_Down_coord_100ep_pre")
         self.parser.add_argument("--split",
                                  type=str,
                                  help="which training split to use",
@@ -102,7 +102,7 @@ class LiteMonoOptions:
         self.parser.add_argument("--batch_size",
                                  type=int,
                                  help="batch size",
-                                 default=8) # default=16
+                                 default=12) # default=16
         self.parser.add_argument("--lr",
                                  nargs="+",
                                  type=float,
@@ -138,6 +138,7 @@ class LiteMonoOptions:
                                  action="store_true")
         self.parser.add_argument("--mypretrain",
                                  type=str,
+                                 default=r"C:\Users\wodud\OneDrive\Desktop\Lite-mono_custom\lite-mono-pretrain.pth",
                                  help="if set, use my pretrained encoder")
         self.parser.add_argument("--weights_init",
                                  type=str,

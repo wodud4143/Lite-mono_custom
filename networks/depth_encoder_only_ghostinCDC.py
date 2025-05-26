@@ -431,7 +431,11 @@ class LiteMono(nn.Module):
         )
         
         self.cooratt = CoordAtt(self.dims[0],self.dims[0])
-
+        #add
+        self.coordatt_down = nn.ModuleList([
+            CoordAtt(48, 48),
+            CoordAtt(80, 80)
+        ])
 
         self.downsample_layers.append(stem1)
         
@@ -494,35 +498,46 @@ class LiteMono(nn.Module):
     def forward_features(self, x):
         features = []
         x = (x - 0.45) / 0.225
-
         x_down = []
         for i in range(4):
             #다운 샘플링 (2,4,8,16)
             x_down.append(self.input_downsample[i](x))
+            
         
 
+        """-------------Stage1-----------------"""
         tmp_x = []
         x = self.downsample_layers[0](x)
         """---------------- applying ca block to x -------------------"""
         x = self.cooratt(x)
         """-----------------------------------------------------------"""
+        
+        # Downsample
         x = self.stem2(torch.cat((x, x_down[0]), dim=1))
         tmp_x.append(x)
+        
+        """------------------------------------"""
 
+
+        """------------Stage2-----------------"""
         for s in range(len(self.stages[0])-1):
             x = self.stages[0][s](x)
         x = self.stages[0][-1](x)
         tmp_x.append(x)
         features.append(x)
-
+        """-----------------------------------"""
         # feature map 1 : (8, 48, 48, 160)
         # feature map 2 : (8, 80, 24, 80)
         # feature map 3 : (8, 128, 12, 40)
-        # feature map 4 : (8, x, 6, 20) 생성.
+        # x_down 원본 이미지 AvgPool
         
         for i in range(1, 3):
+            """---------------- applying ca block to downsample -------------------"""
+            tmp_x[0] = self.coordatt_down[i - 1](tmp_x[0])
+            """--------------------------------------------------------------------"""
             tmp_x.append(x_down[i])
             x = torch.cat(tmp_x, dim=1)
+            #Downsample
             x = self.downsample_layers[i](x)
 
             tmp_x = [x]

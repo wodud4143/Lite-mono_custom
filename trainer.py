@@ -700,7 +700,7 @@ class Trainer:
         self.opt.mypretrain = os.path.expanduser(self.opt.mypretrain)
         path = self.opt.mypretrain
         model_dict = self.models["encoder"].state_dict()
-        pretrained_dict = torch.load(path)['model']
+        pretrained_dict = torch.load(path, weights_only=False)['model']
         pretrained_dict = {k: v for k, v in pretrained_dict.items() if (k in model_dict and not k.startswith('norm'))}
         model_dict.update(pretrained_dict)
         self.models["encoder"].load_state_dict(model_dict)
