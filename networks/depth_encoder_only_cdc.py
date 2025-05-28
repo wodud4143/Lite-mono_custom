@@ -419,33 +419,22 @@ class LiteMono(nn.Module):
         self.downsample_layers = nn.ModuleList()  # stem and 3 intermediate downsampling conv layers
 
         # region Stem1
-        stem1_ca = nn.Sequential(
+        stem1 = nn.Sequential(
             Conv(in_chans, self.dims[0], kSize=3, stride=2, padding=1, bn_act=True),
             InvertedBottleneck(in_channels=self.dims[0], out_channels=self.dims[0], expansion=2, kernel_size=3, bn_act=True),
-            # InvertedBottleneck(in_channels=self.dims[0], out_channels=self.dims[0], expansion=2, kernel_size=3, bn_act=True),
-            CoordAtt(self.dims[0],self.dims[0])
+            InvertedBottleneck(in_channels=self.dims[0], out_channels=self.dims[0], expansion=2, kernel_size=3, bn_act=True),
         )
         
         
-        self.ca_block = CoordAtt(self.dims[0]+3, self.dims[0]+3)
-        self.avg_pool = nn.AvgPool2d(kernel_size=3, stride=2, padding=1)
-        self.custom_ghost = CustomGhostModule(exp=2, in_channels=self.dims[0]+3, mid_channels=self.dims[0]//2)
-        
-        # self.cooratt = CoordAtt(self.dims[0],self.dims[0])
+
         
         # region Stem2
-        # self.stem2 = nn.Sequential(
-        #     DepthwiseSeparableConv(in_channels = self.dims[0]+3, out_channels = self.dims[0], kernel_size=3, stride=2, bn_act=True), #bn_act=Flase
-        # )
+        self.stem2 = nn.Sequential(
+            DepthwiseSeparableConv(in_channels = self.dims[0]+3, out_channels = self.dims[0], kernel_size=3, stride=2, bn_act=True), #bn_act=Flase
+        )
         
         
-        # #add
-        # self.coordatt_down = nn.ModuleList([
-        #     CoordAtt(48, 48),
-        #     CoordAtt(80, 80)
-        # ])
-
-        self.downsample_layers.append(stem1_ca)
+        self.downsample_layers.append(stem1)
         
         
         self.input_downsample = nn.ModuleList()
@@ -516,16 +505,8 @@ class LiteMono(nn.Module):
         """-------------Stage1-----------------"""
         tmp_x = []
         x = self.downsample_layers[0](x)
-        # """---------------- applying ca block to x -------------------"""
-        # x = self.cooratt(x)
-        # """-----------------------------------------------------------"""
-        
         # Downsample
-        # x = self.stem2(torch.cat((x, x_down[0]), dim=1))
-        concat = torch.cat((x, x_down[0]), dim=1)
-        concat = self.ca_block(concat)
-        concat = self.avg_pool(concat)
-        x = self.custom_ghost(concat)
+        x = self.stem2(torch.cat((x, x_down[0]), dim=1))
         tmp_x.append(x)
         """------------------------------------"""
 
@@ -543,9 +524,6 @@ class LiteMono(nn.Module):
         # x_down 원본 이미지 AvgPool
         
         for i in range(1, 3):
-            """---------------- applying ca block to downsample -------------------"""
-            # tmp_x[0] = self.coordatt_down[i - 1](tmp_x[0])
-            """--------------------------------------------------------------------"""
             tmp_x.append(x_down[i])
             x = torch.cat(tmp_x, dim=1)
             #Downsample

@@ -233,7 +233,7 @@ def evaluate(opt,weight_path=None):
         # return mean_errors
 def direct():
 
-    directory = r"C:\Users\wodud\OneDrive\Desktop\Lite-mono_custom\experiments\logs\Ghost_CDC_Asymm_ep100\models" 
+    directory = r"C:\Users\wodud\OneDrive\Desktop\Lite-mono_custom\experiments\logs\Ghost_CDC_Down_coord_100ep_pre\models" 
 
     folders = [os.path.join(directory, f) for f in os.listdir(directory) if os.path.isdir(os.path.join(directory, f))]
 
