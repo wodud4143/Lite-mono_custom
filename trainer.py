@@ -164,6 +164,9 @@ class Trainer:
 
         num_train_samples = len(train_filenames)
         self.num_total_steps = num_train_samples // self.opt.batch_size * self.opt.num_epochs
+        
+        
+        #region DataLoader
 
         # ------------------------ Train ------------------------
         train_dataset = self.dataset(self.opt.data_path, train_filenames, 
@@ -171,7 +174,7 @@ class Trainer:
                                      self.opt.frame_ids, 4, is_train=True, img_ext=img_ext)
         
         self.train_loader = DataLoader(train_dataset, self.opt.batch_size, True, 
-                                       num_workers=self.opt.num_workers, pin_memory=True, drop_last=True)
+                                       num_workers=self.opt.num_workers, pin_memory=True, drop_last=True, prefetch_factor=2,persistent_workers=True )
         # ---------------------------------------------------------------
         
         # ------------------------ Validation ------------------------
@@ -179,7 +182,7 @@ class Trainer:
                                    self.opt.frame_ids, 4, is_train=False, img_ext=img_ext)
         
         self.val_loader = DataLoader(val_dataset, self.opt.batch_size, True,
-                                     num_workers=self.opt.num_workers, pin_memory=True, drop_last=True)
+                                     num_workers=self.opt.num_workers, pin_memory=True, drop_last=True, prefetch_factor=2,persistent_workers=True)
         # ---------------------------------------------------------------
         self.val_iter = iter(self.val_loader)
 
@@ -287,8 +290,9 @@ class Trainer:
     def process_batch(self, inputs):
         """Pass a minibatch through the network and generate images and losses
         """
+        # region 수정
         for key, ipt in inputs.items():
-            inputs[key] = ipt.to(self.device)
+            inputs[key] = ipt.to(self.device, non_blocking=True)
 
         if self.opt.pose_model_type == "shared":
             # If we are using a shared encoder for both depth and pose (as advocated

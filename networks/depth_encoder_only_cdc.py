@@ -324,6 +324,11 @@ class LGFI(nn.Module):
         
         # XCA (Convert XCA to MQA)
         B, C, H, W = x.shape
+        # if H*W != 7680:
+        #     seblock_x = self.se_block(x)
+        # stage3_size = 480 # 480
+        # if H*W == stage3_size:
+        #     seblock_x = self.se_block(x)
         
         x = x.reshape(B, C, H * W).permute(0, 2, 1)  
         
@@ -331,10 +336,29 @@ class LGFI(nn.Module):
             pos_encoding = self.pos_embd(B, H, W).reshape(B, -1, x.shape[1]).permute(0, 2, 1)
             x = x + pos_encoding
         
-
+        # if H*W != 7680:
+        # if H*W == stage3_size:
+        #     seblock_x = seblock_x.reshape(B, C, H * W).permute(0, 2, 1)  
+        #     if self.pos_embd:
+        #         pos_encoding = self.pos_embd(B, H, W).reshape(B, -1, x.shape[1]).permute(0, 2, 1)
+        #         seblock_x = seblock_x + pos_encoding
+        
+        # region MQA featuresize
+        _,HW,_ = x.shape
+        
+        # 2개의 x 중에서 하나의 x에 se block (channel-attention) 적용해서 연산해보기.
+        # if HW != 7680:
+        # if HW == stage3_size:
+        #     # x_mqa = self.mqa_layer(x, seblock_x)
+        #     x_mqa = self.mqa_layer(seblock_x, x)
+        #     x = x_mqa
         x = x + self.gamma_xca * self.xca(self.norm_xca(x))
         
         x = x.reshape(B, H, W, C)
+        # # feature fusion
+        # if HW != 7680:
+        #     x_mqa = x_mqa.reshape(B, H, W, C)
+        #     x = x + x_mqa
 
         # Inverted Bottleneck
         x = self.norm(x)
@@ -421,22 +445,21 @@ class LiteMono(nn.Module):
         # region Stem1
         stem1 = nn.Sequential(
             Conv(in_chans, self.dims[0], kSize=3, stride=2, padding=1, bn_act=True),
-            InvertedBottleneck(in_channels=self.dims[0], out_channels=self.dims[0], expansion=2, kernel_size=3, bn_act=True),
-            InvertedBottleneck(in_channels=self.dims[0], out_channels=self.dims[0], expansion=2, kernel_size=3, bn_act=True),
+            InvertedBottleneck(in_channels=self.dims[0], out_channels=self.dims[0], expansion=2, kernel_size=3 ),
+            InvertedBottleneck(in_channels=self.dims[0], out_channels=self.dims[0], expansion=2, kernel_size=3 ),
         )
-        
-        
-
         
         # region Stem2
         self.stem2 = nn.Sequential(
             DepthwiseSeparableConv(in_channels = self.dims[0]+3, out_channels = self.dims[0], kernel_size=3, stride=2, bn_act=True), #bn_act=Flase
         )
         
-        
+        # self.cooratt = CoordAtt(self.dims[0],self.dims[0])
+
+
         self.downsample_layers.append(stem1)
         
-        
+      
         self.input_downsample = nn.ModuleList()
         for i in range(1, 5):
             self.input_downsample.append(AvgPool(i))
@@ -495,38 +518,34 @@ class LiteMono(nn.Module):
     def forward_features(self, x):
         features = []
         x = (x - 0.45) / 0.225
+
         x_down = []
         for i in range(4):
-            #다운 샘플링 (2,4,8,16)
             x_down.append(self.input_downsample[i](x))
-            
         
 
-        """-------------Stage1-----------------"""
         tmp_x = []
         x = self.downsample_layers[0](x)
-        # Downsample
+        """---------------- applying ca block to x -------------------"""
+        # x = self.cooratt(x)
+        """-----------------------------------------------------------"""
         x = self.stem2(torch.cat((x, x_down[0]), dim=1))
         tmp_x.append(x)
-        """------------------------------------"""
 
-
-        """------------Stage2-----------------"""
         for s in range(len(self.stages[0])-1):
             x = self.stages[0][s](x)
         x = self.stages[0][-1](x)
         tmp_x.append(x)
         features.append(x)
-        """-----------------------------------"""
+
         # feature map 1 : (8, 48, 48, 160)
         # feature map 2 : (8, 80, 24, 80)
         # feature map 3 : (8, 128, 12, 40)
-        # x_down 원본 이미지 AvgPool
+        # feature map 4 : (8, x, 6, 20) 생성.
         
         for i in range(1, 3):
             tmp_x.append(x_down[i])
             x = torch.cat(tmp_x, dim=1)
-            #Downsample
             x = self.downsample_layers[i](x)
 
             tmp_x = [x]
