@@ -421,7 +421,7 @@ class LiteMono(nn.Module):
         # region Stem1
         stem1_ca = nn.Sequential(
             Conv(in_chans, self.dims[0], kSize=3, stride=2, padding=1, bn_act=True),
-            InvertedBottleneck(in_channels=self.dims[0], out_channels=self.dims[0], expansion=3, kernel_size=3, bn_act=True),
+            InvertedBottleneck(in_channels=self.dims[0], out_channels=self.dims[0], expansion=2, kernel_size=3, bn_act=True),
             # InvertedBottleneck(in_channels=self.dims[0], out_channels=self.dims[0], expansion=2, kernel_size=3, bn_act=True),
             CoordAtt(self.dims[0],self.dims[0])
         )
