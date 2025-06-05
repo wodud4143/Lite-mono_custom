@@ -83,6 +83,7 @@ Click on the links in the '--model' column to download a trained model.
 
 ## Weight
     https://drive.google.com/drive/folders/1N3y-N7eQG_OyoadZlVz-gB6nC652VtWj?usp=drive_link](https://drive.google.com/drive/folders/1N3y-N7eQG_OyoadZlVz-gB6nC652VtWj?usp=sharing
+    https://drive.google.com/drive/folders/1EaZ2qHxiFmKI4f5y7UgMWsP2YNZP5sn_?usp=sharing](https://drive.google.com/drive/folders/1EaZ2qHxiFmKI4f5y7UgMWsP2YNZP5sn_?usp=drive_link)
 ## Training
 #### dependency installation 
     pip install 'git+https://github.com/saadnaeem-dev/pytorch-linear-warmup-cosine-annealing-warm-restarts-weight-decay'
