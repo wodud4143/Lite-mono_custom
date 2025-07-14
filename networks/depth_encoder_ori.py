@@ -2,7 +2,7 @@ import numpy as np
 import torch
 from torch import nn
 import torch.nn.functional as F
-from timm.models.layers import DropPath
+from timm.layers import DropPath
 import math
 import torch.cuda
 

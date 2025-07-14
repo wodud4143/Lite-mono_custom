@@ -26,7 +26,7 @@ class LiteMonoOptions:
           self.parser.add_argument("--model_name",
                                    type=str,
                                    help="the name of the folder to save the model in",
-                                   default="test")
+                                   default="lite_v3")
           self.parser.add_argument("--split",
                                    type=str,
                                    help="which training split to use",
@@ -110,50 +110,15 @@ class LiteMonoOptions:
                                         "Initial learning rate, "
                                         "minimum learning rate, "
                                         "First cycle step size.",
-                                   default=[0.0001, 5e-6, 31, 0.0001, 1e-5, 31])
+                                   default=[0.0005, 1e-5, 35, 0.0005, 1e-5, 35]) #pretrain - [0.0001, 5e-6, 31, 0.0001, 1e-5, 31], Scratch From -[0.0005, 1e-5, 35, 0.0005, 1e-5, 35]
           self.parser.add_argument("--num_epochs",
                                    type=int,
                                    help="number of epochs",
-                                   default=100) #50
+                                   default=50) #50
           self.parser.add_argument("--scheduler_step_size",
                                    type=int,
                                    help="step size of the scheduler",
                                    default=15)
-
-
-          # region OPTIMIZATION options 섹션에 추가
-          self.parser.add_argument("--use_amp",
-                              help="if set, uses Mixed Precision Training",
-                              action="store_true",
-                              default=True)
-          self.parser.add_argument("--num_workers_optimized", 
-                              type=int,
-                              help="optimized number of dataloader workers",
-                              default=16)
-          self.parser.add_argument("--prefetch_factor",
-                              type=int, 
-                              help="prefetch factor for dataloader",
-                              default=4)
-          self.parser.add_argument("--persistent_workers",
-                              help="if set, uses persistent workers",
-                              action="store_true",
-                              default=True)
-          self.parser.add_argument("--grad_clip_norm",
-                              type=float,
-                              help="gradient clipping norm",
-                              default=1.0)
-          self.parser.add_argument("--enable_memory_cleanup",
-                              help="if set, enables periodic memory cleanup", 
-                              action="store_true",
-                              default=True)
-          self.parser.add_argument("--loss_clamp_min",
-                              type=float,
-                              help="minimum loss clamping value for AMP",
-                              default=1e-7)
-          self.parser.add_argument("--loss_clamp_max", 
-                              type=float,
-                              help="maximum loss clamping value for AMP",
-                              default=100)
 
           # ABLATION options
           self.parser.add_argument("--v1_multiscale",
@@ -171,9 +136,10 @@ class LiteMonoOptions:
           self.parser.add_argument("--no_ssim",
                                    help="if set, disables ssim in the loss",
                                    action="store_true")
+          # region mypretrain
           self.parser.add_argument("--mypretrain",
                                    type=str,
-                                   default=r"C:\Users\wodud\OneDrive\Desktop\Lite-mono_custom\lite-mono-pretrain.pth",
+                                   # default=r"C:\Users\wodud\OneDrive\Desktop\Lite-mono_custom\lite-mono-pretrain.pth",
                                    help="if set, use my pretrained encoder")
           self.parser.add_argument("--weights_init",
                                    type=str,
@@ -251,7 +217,7 @@ class LiteMonoOptions:
                                    help="if set will perform the flipping post processing "
                                         "from the original monodepth paper",
                                    action="store_true")
-
+          
      def parse(self):
           self.options = self.parser.parse_args()
           return self.options

@@ -1,254 +1,163 @@
+import os.path as osp
 import torch
 import tensorrt as trt
-import numpy as np
-import os
 import time
+import onnx
+
+from PIL import Image
+import networks 
+from glob import glob
+from torchvision import transforms
+from onnx import numpy_helper
+import onnxoptimizer
 
 
-import networks
+class FullModel(torch.nn.Module):
+    def __init__(self, encoder, decoder):
+        super().__init__()
+        self.encoder = encoder
+        self.decoder = decoder
 
-def simple_fp16_conversion():
-
-    
-    print(" TensorRT 변환 시작")
-    print(f"TensorRT 버전: {trt.__version__}")
-    
-    # # 1. 모델 로드
-    # weights_folder = "./liteweight"
-    # encoder_path = os.path.join(weights_folder, "encoder.pth")
-    # decoder_path = os.path.join(weights_folder, "depth.pth")
-    
-    # encoder_dict = torch.load(encoder_path, map_location='cuda')
-    # decoder_dict = torch.load(decoder_path, map_location='cuda')
-    
-    # feed_height = encoder_dict['height']
-    # feed_width = encoder_dict['width']
-    
-    # print(f"모델 입력 크기: {feed_width} x {feed_height}")
-    
-    # # 2. 모델 생성
-    # encoder = networks.LiteMono(
-    #     model="lite-mono",
-    #     height=feed_height,
-    #     width=feed_width
-    # )
-    # encoder.load_state_dict({k: v for k, v in encoder_dict.items() if k in encoder.state_dict()})
-    
-    # depth_decoder = networks.DepthDecoder(encoder.num_ch_enc, scales=range(3))
-    # depth_decoder.load_state_dict({k: v for k, v in decoder_dict.items() if k in depth_decoder.state_dict()})
-    
-    # class SimpleModel(torch.nn.Module):
-    #     def __init__(self, encoder, decoder):
-    #         super().__init__()
-    #         self.encoder = encoder
-    #         self.decoder = decoder
+    def forward(self, x):
+        encoded = self.encoder(x)
+        out = self.decoder(encoded)
         
-    #     def forward(self, x):
-    #         features = self.encoder(x)
-    #         outputs = self.decoder(features)
-    #         return outputs[("disp", 0)]
+        disp = out[('disp', 0)]
+        disp_2x_down = out[('disp', 1)]
+        disp_4x_down = out[('disp', 2)]
+        
+        return disp                                                                                                                                                                                                  
     
-    # model = SimpleModel(encoder, depth_decoder).cuda().eval()
     
-    # # 3. ONNX 변환
-    # dummy_input = torch.randn(1, 3, feed_height, feed_width).cuda()
-    onnx_path = "proposal3.onnx"
     
-    # print("ONNX 변환 중...")
-    # try:
-    #     torch.onnx.export(
-    #         model,
-    #         dummy_input,
-    #         onnx_path,
-    #         export_params=True,
-    #         opset_version=11,  
-    #         do_constant_folding=True,
-    #         input_names=['input'],
-    #         output_names=['output'],
-    #         dynamic_axes=None,
-    #         verbose=False
-    #     )
-    #     print("ONNX 변환 성공")
-    # except Exception as e:
-    #     print(f"ONNX 변환 실패: {e}")
-    #     return False
     
-    # 4. TensorRT FP16 변환 
-    print("TensorRT FP16 변환 중...")
+def custom_load_state_dict(loaded_enc, loaded_dec):
+    with torch.no_grad():
+        encoder = networks.LiteMono(model="lite-mono",
+                                                    drop_path_rate=0.2,
+                                                    width=640, height=192)
+        decoder = networks.DepthDecoder(encoder.num_ch_enc, scales=[0, 1, 2])
+
+        enc_state_dict, dec_state_dict = encoder.state_dict(), decoder.state_dict()
+        
+        encoder.load_state_dict({
+            k: v for k, v in loaded_enc.items() 
+            if k in enc_state_dict and enc_state_dict[k].shape == v.shape})
+        decoder.load_state_dict({
+            k: v for k, v in loaded_dec.items() 
+            if k in dec_state_dict and dec_state_dict[k].shape == v.shape})
+
+        encoder.to(device)
+        decoder.to(device)
+        
+        encoder.eval()
+        decoder.eval()
     
-    TRT_LOGGER = trt.Logger(trt.Logger.ERROR)  # 에러만 출력
+    return encoder, decoder
+
+
+def convert_onnx_and_trt(onnx_dir, models, device='cpu'):
+    dummy_input = torch.randn(1, 3, 192, 640).to(device)  # 입력 사이즈에 맞게 조절
+    
+    encoder, decoder = models
+    model = FullModel(encoder, decoder).eval()
+    model = model.to(device)
+    
+    
+    torch.onnx.export(
+        model, dummy_input, osp.join(onnx_dir, model_type+'.onnx'),
+        input_names=["input"], output_names=["output"],
+        dynamic_axes=None,
+        export_params=True,
+        do_constant_folding=True,
+        opset_version=17
+    )
+    
+    # 그래프 최적화
+    model = onnx.load(osp.join(onnx_dir, model_type+'.onnx'))
+    passes = [
+        'eliminate_deadend',
+        'eliminate_identity',
+        'eliminate_nop_transpose',
+        'fuse_consecutive_transposes',
+        'fuse_bn_into_conv',
+        'fuse_pad_into_conv',  # Depthwise-friendly
+        'fuse_add_bias_into_conv'  # TensorRT에서 Conv + Bias로 병합
+    ]
+
+    optimized_model = onnxoptimizer.optimize(model, passes)
+    for init in optimized_model.graph.initializer:
+        if init.data_type == onnx.TensorProto.INT64:
+            arr = numpy_helper.to_array(init)
+            arr32 = arr.astype('int32')
+            init.CopyFrom(numpy_helper.from_array(arr32, init.name))
+    
+    onnx.save(optimized_model, osp.join(onnx_dir, f'optimized_{model_type}.onnx'))
+    engine = build_engine(osp.join(onnx_dir, f'optimized_{model_type}.onnx'))
+    
+    with open(osp.join(onnx_dir, f"optimized_{model_type}.engine"), "wb") as f:
+        f.write(engine.serialize())
+    print('done')
+
+
+# region [build trt]
+def build_engine(onnx_file_path):
+    TRT_LOGGER = trt.Logger(trt.Logger.WARNING)
+    
     builder = trt.Builder(TRT_LOGGER)
-    network = builder.create_network(1 << int(trt.NetworkDefinitionCreationFlag.EXPLICIT_BATCH))
-    parser = trt.OnnxParser(network, TRT_LOGGER)
-    
-   
     config = builder.create_builder_config()
-    
-    # 메모리 설정
-    try:
-        config.set_memory_pool_limit(trt.MemoryPoolType.WORKSPACE, 1 << 30)
-    except:
-        config.max_workspace_size = 1 << 30
-    
-    # FP16 활성화
-    config.set_flag(trt.BuilderFlag.FP16)
-    print("FP16 활성화")
-    
-    # GPU 전용
-    config.default_device_type = trt.DeviceType.GPU
-    
-    # ONNX 파싱
-    with open(onnx_path, 'rb') as model_file:
-        if not parser.parse(model_file.read()):
-            print("ONNX 파싱 실패")
-            for error in range(parser.num_errors):
-                print(f"  {parser.get_error(error)}")
-            return False
-    
-    print("ONNX 파싱 성공")
-    
-    # 엔진 빌드
-    print("FP16 Engine 빌드 중...")
-    start_time = time.time()
-    
-    try:
-        # TensorRT 10.x 방식
-        serialized_engine = builder.build_serialized_network(network, config)
-        
-        if serialized_engine is None:
-            print("Engine 빌드 실패")
-            return False
-        
-        build_time = time.time() - start_time
-        print(f"Engine 빌드 완료 ({build_time:.1f}초)")
-        
-        # TensorRT 10.x 호환 저장
-        engine_path = "simple_fp16_ori.engine"
-        
-        # IHostMemory 객체 처리 (TensorRT 10.x)
-        try:
-            # TensorRT 10.x 방식 - bytes() 변환
-            engine_data = bytes(serialized_engine)
-            
-            # 크기 계산 시도
-            try:
-                size_mb = serialized_engine.size() / 1024 / 1024
-            except:
-                # size() 메서드가 없는 경우 len() 대신 다른 방법
-                size_mb = len(engine_data) / 1024 / 1024
-                
-        except Exception as convert_error:
-            print(f"데이터 변환 오류: {convert_error}")
-            # 직접 저장 시도
-            engine_data = serialized_engine
-            size_mb = 0  # 크기는 나중에 계산
-        
-        # 파일 저장
-        try:
-            with open(engine_path, 'wb') as f:
-                f.write(engine_data)
-            
-            # 저장 후 실제 파일 크기 확인
-            actual_size = os.path.getsize(engine_path) / 1024 / 1024
-            
-            print(f"FP16 Engine 저장: {engine_path}")
-            print(f"파일 크기: {actual_size:.2f} MB")
-            
-        except Exception as save_error:
-            print(f"파일 저장 실패: {save_error}")
-            return False
-        
-        # 정리
-        os.remove(onnx_path)
-        
-        # 간단 테스트
-        test_simple_fp16(engine_path)
-        
-        return True
-        
-    except Exception as e:
-        build_time = time.time() - start_time
-        print(f"Engine 빌드 실패 ({build_time:.1f}초)")
-        print(f"오류: {e}")
-        return False
+    config.set_memory_pool_limit(trt.MemoryPoolType.WORKSPACE, 1 << 30)  # 1GB
 
-def test_simple_fp16(engine_path):
+
+    # ✅ FP16 지원 여부 확인
+    config.set_flag(trt.BuilderFlag.FP16)
     
-    print("FP16 Engine 테스트")
     
-    try:
-        import pycuda.driver as cuda
-        import pycuda.autoinit
-        
-        # 엔진 로드
-        TRT_LOGGER = trt.Logger(trt.Logger.WARNING)
-        with open(engine_path, 'rb') as f:
-            engine_data = f.read()
-        
-        runtime = trt.Runtime(TRT_LOGGER)
-        engine = runtime.deserialize_cuda_engine(engine_data)
-        context = engine.create_execution_context()
-        
-        # 메모리 할당 
-        input_shape = (1, 3, 192, 640)
-        output_shape = (1, 1, 192, 640)
-        
-        input_size = int(np.prod(input_shape) * 4)
-        output_size = int(np.prod(output_shape) * 4)
-        
-        d_input = cuda.mem_alloc(input_size)
-        d_output = cuda.mem_alloc(output_size)
-        stream = cuda.Stream()
-        
-        # 테스트 데이터
-        test_input = np.random.randn(*input_shape).astype(np.float32)
-        
-        # 10회 추론 테스트
-        times = []
-        for i in range(10):
-            start_time = time.time()
-            
-            # 데이터 전송
-            cuda.memcpy_htod_async(d_input, test_input, stream)
-            
-            # 추론 (TensorRT 10.x)
-            if hasattr(engine, 'num_io_tensors'):
-                for j in range(engine.num_io_tensors):
-                    name = engine.get_tensor_name(j)
-                    if engine.get_tensor_mode(name) == trt.TensorIOMode.INPUT:
-                        context.set_tensor_address(name, int(d_input))
-                    else:
-                        context.set_tensor_address(name, int(d_output))
-                context.execute_async_v3(stream_handle=stream.handle)
-            else:
-                # Fallback
-                bindings = [int(d_input), int(d_output)]
-                context.execute_async_v2(bindings, stream.handle)
-            
-            # 결과 복사
-            output = np.empty(output_shape, dtype=np.float32)
-            cuda.memcpy_dtoh_async(output, d_output, stream)
-            stream.synchronize()
-            
-            end_time = time.time()
-            times.append((end_time - start_time) * 1000)
-        
-        avg_time = np.mean(times)
-        fps = 1000 / avg_time
-        
-        print(f"FP16 테스트 ")
-        print(f"평균 추론 시간: {avg_time:.2f} ms")
-        print(f"FPS: {fps:.1f}")
-        
-        
-    except Exception as e:
-        print(f"테스트 실패: {e}")
+    # ✅ 네트워크 생성 (explicit batch)
+    network_flags = 1 << int(trt.NetworkDefinitionCreationFlag.EXPLICIT_BATCH)
+    network = builder.create_network(network_flags)
+
+    # ✅ ONNX 파싱
+    parser = trt.OnnxParser(network, TRT_LOGGER)
+    with open(onnx_file_path, 'rb') as f:
+        parser.parse(f.read())
+
+    serialized_engine = builder.build_serialized_network(network, config)
+    if serialized_engine is None:
+        print("Failed to build engine")
+        return None
+    
+
+    runtime = trt.Runtime(TRT_LOGGER)
+    engine = runtime.deserialize_cuda_engine(serialized_engine)
+    
+    # # ✅ 엔진 빌드
+    # engine = builder.build_engine(network, config)
+    return engine
+
+
+
+def main():
+    onnx_dir = r"C:\Users\wodud\OneDrive\Desktop\Lite-mono_custom\onnx_output"
+    
+    enc_state_dict = torch.load(enc_model_path, map_location=device)
+    dec_state_dict = torch.load(dec_model_path, map_location=device)
+    
+    encoder, decoder = custom_load_state_dict(enc_state_dict, dec_state_dict)
+    convert_onnx_and_trt(onnx_dir, models=[encoder, decoder], device=device)
+
 
 if __name__ == "__main__":
-    print("FP16 TensorRT 변환")
-    success = simple_fp16_conversion()
+    device = 'cuda'
+    model_type = 'original'
+    exp_dir = osp.join(osp.dirname(__file__), "experiments\logs")
+
+    enc_model = 'encoder.pth'
+    dec_model = 'depth.pth'
     
-    if success:
-        print("\nP16 변환 성공!")
-    else:
-        print("\nFP16 변환 실패")
+    # enc_model_path = osp.join(exp_dir,model_type,'models','weights_10', enc_model)
+    # dec_model_path = osp.join(exp_dir,model_type,'models','weights_10', dec_model)
+    enc_model_path = r"C:\Users\wodud\OneDrive\Desktop\Lite-mono_custom\lite-mono_640x192\encoder.pth"
+    dec_model_path = r"C:\Users\wodud\OneDrive\Desktop\Lite-mono_custom\lite-mono_640x192\depth.pth"
+    main()
+    # infer_pth()

@@ -15,45 +15,74 @@ class BNRELU(nn.Module):
 
         return output
     
-    
+
+# region - DepthwiseSeparable
 class DepthwiseSeparableConv(nn.Module):
-    def __init__(self, in_channels, out_channels, kernel_size=3, stride=2, dilation=(1, 1), padding=0, bn_act=False):
+    def __init__(self, in_channels, out_channels, kernel_size=3, stride=2, dilation=(1, 1), bn_act=False):
         super().__init__()
-        self.depthwise = nn.Conv2d(in_channels, in_channels,  kernel_size, dilation=dilation, padding=kernel_size//2, groups=in_channels,
-                                   stride=stride, bias=False)
+        self.depthwise = nn.Conv2d(in_channels, in_channels,  kernel_size, dilation=dilation, padding=1, 
+                                   groups=in_channels,
+                                   stride=stride, 
+                                   bias=False)
         self.pointwise = nn.Conv2d(in_channels, out_channels, kernel_size=1)
         self.bn_act = bn_act
         
         if self.bn_act:
-            self.bn_gelu = BNGELU(out_channels)
-            # self.bn_relu = BNRELU(out_channels)
+            # self.bn_gelu = BNGELU(out_channels)
+            self.bn_relu = BNRELU(out_channels)
             
 
     def forward(self, x):
         x = self.depthwise(x)
         x = self.pointwise(x)
         if self.bn_act:
-            x = self.bn_gelu(x)
-            # x = self.bn_relu(x)
+            # x = self.bn_gelu(x)
+            x = self.bn_relu(x)
         
         return x
     
 
+# region - Ghost
+# class CustomGhostModule(nn.Module):
+#     def __init__(self, in_channels, out_channels, exp):
+#         super().__init__()
+#         self.exp = exp
+#         self.in_channels = in_channels
+#         self.out_channels = out_channels
+        
+#         self.primary_conv = nn.Conv2d(in_channels, out_channels, 1, bias=False)
+#         self.primary_bn = nn.BatchNorm2d(out_channels, eps=1e-3, momentum=0.999)
+        
+#         self.depthwise_conv = nn.Conv2d(out_channels, out_channels * exp, 
+#                                        3, padding=1, groups=out_channels, bias=False)
+#         self.depthwise_bn = nn.BatchNorm2d(out_channels * exp, eps=1e-3, momentum=0.999)
+                                           
+        
+#     def forward(self, x):
+#         x_primary = self.primary_conv(x)
+#         x_primary = self.primary_bn(x_primary)
+        
+#         x_depthwise = self.depthwise_conv(x_primary)
+#         x_depthwise = self.depthwise_bn(x_depthwise)
+        
+#         return torch.cat([x_primary, x_depthwise], dim=1)
+        
+
 class CustomGhostModule(nn.Module):
-    def __init__(self, exp, in_channels, mid_channels):
+    def __init__(self, exp, in_channels, out_channels):
         super().__init__()
         self.exp = exp
         self.in_channels = in_channels
-        self.mid_channels = mid_channels
+        self.out_channels = out_channels
         
         self.primary_conv = nn.Sequential(
-            nn.Conv2d(self.in_channels, mid_channels, kernel_size=1, stride=1, padding=0, bias=False),
-            nn.BatchNorm2d(mid_channels, eps=1e-3, momentum=0.999)
+            nn.Conv2d(self.in_channels, out_channels, kernel_size=1, stride=1, padding=0, bias=False),
+            nn.BatchNorm2d(out_channels, eps=1e-3, momentum=0.999)
         )
         
         self.depthwise_conv = nn.Sequential(
-            nn.Conv2d(mid_channels, mid_channels * (self.exp - 1), kernel_size=3, stride=1, padding=1, groups=mid_channels, bias=False),
-            nn.BatchNorm2d(mid_channels * (self.exp - 1), eps=1e-3, momentum=0.999)
+            nn.Conv2d(out_channels, out_channels * (self.exp - 1), kernel_size=3, stride=1, padding=1, groups=out_channels, bias=False),
+            nn.BatchNorm2d(out_channels * (self.exp - 1), eps=1e-3, momentum=0.999)
         )
         
         
@@ -64,7 +93,9 @@ class CustomGhostModule(nn.Module):
         
         return out
         
+
         
+# region - IB
 class InvertedBottleneck(nn.Module):
     def __init__(self, in_channels, out_channels, expansion=6, kernel_size=3, stride=1, dilation=1, bn_act=False):
         super().__init__()
@@ -78,7 +109,9 @@ class InvertedBottleneck(nn.Module):
         ) if expansion != 1 else nn.Identity()
 
         self.depthwise = nn.Sequential(
-            nn.Conv2d(hidden_dim, hidden_dim, kernel_size=kernel_size, stride=stride, padding=(kernel_size//2)*dilation,
+            nn.Conv2d(hidden_dim, hidden_dim, 
+                      kernel_size=kernel_size, stride=stride,
+                      padding=(kernel_size//2)*dilation,
                       dilation=dilation, groups=hidden_dim, bias=False),
             nn.BatchNorm2d(hidden_dim)
             # nn.ReLU6(inplace=True)
@@ -228,12 +261,6 @@ class CoordAtt(nn.Module):
 
         return out
     
-"""----------------------------------------------------------""" 
-
-# region AsymmNet
-"""--------------------------AsymmNet------------------------"""
-
-
 
 class HardSwish(nn.Module):
     def __init__(self, inplace=False):
@@ -372,3 +399,24 @@ class AsymmBottleneck(nn.Module):
             raise NotImplementedError
 
 """-----------------------------------------------------------------------------"""
+
+# region InceptionDWConv2d
+
+class InceptionDWConv2d(nn.Module):
+    """ Inception depthweise convolution
+    """
+    def __init__(self, in_channels, square_kernel_size=3, band_kernel_size=11, branch_ratio=0.125):
+        super().__init__()
+        
+        gc = int(in_channels * branch_ratio) # channel numbers of a convolution branch
+        self.dwconv_hw = nn.Conv2d(gc, gc, square_kernel_size, padding=square_kernel_size//2, groups=gc)
+        self.dwconv_w = nn.Conv2d(gc, gc, kernel_size=(1, band_kernel_size), padding=(0, band_kernel_size//2), groups=gc)
+        self.dwconv_h = nn.Conv2d(gc, gc, kernel_size=(band_kernel_size, 1), padding=(band_kernel_size//2, 0), groups=gc)
+        self.split_indexes = (in_channels - 3 * gc, gc, gc, gc)
+        
+    def forward(self, x):
+        x_id, x_hw, x_w, x_h = torch.split(x, self.split_indexes, dim=1)
+        return torch.cat(
+            (x_id, self.dwconv_hw(x_hw), self.dwconv_w(x_w), self.dwconv_h(x_h)), 
+            dim=1,
+        )

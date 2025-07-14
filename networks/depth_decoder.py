@@ -1,7 +1,7 @@
 from __future__ import absolute_import, division, print_function
 from collections import OrderedDict
 from layers import *
-from timm.models.layers import trunc_normal_
+from timm.layers import trunc_normal_
 
 
 class DepthDecoder(nn.Module):
