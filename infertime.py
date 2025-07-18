@@ -85,24 +85,25 @@ def main():
     inputs, outputs, bindings, stream = allocate_buffers(engine)
     
     context = engine.create_execution_context()
-    avg_inference_time = 0
-    num = 0
-    for test_image_path in test_image_paths:
-        image = preprocess_image(test_image_path, input_shape=(192, 640))
-        np.copyto(inputs[0]['host'], image)
+    after_warmup = []
+    for i in range (1,11) :
+        if i == 1 :
+            print("웜업중")
+        for test_image_path in test_image_paths:
+            image = preprocess_image(test_image_path, input_shape=(192, 640))
+            np.copyto(inputs[0]['host'], image)
+            output, inference_time = infer(engine, context, bindings, inputs, outputs, stream)
+            if i > 3 :
+                after_warmup.append(inference_time)
+                print(f"추론 시간: {inference_time:.3f} ms")
     
-        output, inference_time = infer(engine, context, bindings, inputs, outputs, stream)
-        avg_inference_time += inference_time
-        
-        num += 1
-        print(f"추론 시간: {inference_time:.3f} ms")
-    
-    print(f"평균 추론 시간: {avg_inference_time/num:.3f} ms")
+    # print(f"평균 추론 시간: {avg_inference_time/num:.3f} ms")
+    print(f"{model_type} 평균 추론 시간: {sum(after_warmup)/len(after_warmup):.3f} ms")
 
 
 if __name__ == "__main__":
     
-    model_type = 'original'
+    model_type = 'CBAM'
     test_image_dir = r"C:\Users\wodud\OneDrive\Desktop\Lite-mono_custom\kitti_data\2011_09_26\2011_09_26_drive_0001_sync\image_02\data"
     test_image_paths = glob(osp.join(test_image_dir, "*.png"))
     

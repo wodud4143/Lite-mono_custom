@@ -130,41 +130,7 @@ class LiteMono(nn.Module):
                       num_heads=heads[2], 
                       layer_scale_init_value=layer_scale_init_value)
         ]
-        self.stages.append(nn.Sequential(*stage_blocks))
-        
-        # cur = 0
-        # for i in range(3):
-        #     stage_blocks = []
-        #     for j in range(self.depth[i]):
-                
-        #         if j > self.depth[i] - global_block[i] - 1:
-        #             if global_block_type[i] == 'LGFI':
-        #                 print('LGFI')
-        #                 stage_blocks.append(core.LGFI(dim=self.dims[i], drop_path=dp_rates[cur + j],
-        #                                          expan_ratio=expan_ratio,
-        #                                          use_pos_emb=use_pos_embd_xca[i], num_heads=heads[i],
-        #                                          layer_scale_init_value=layer_scale_init_value,
-        #                                          ))
-        #             else:
-        #                 raise NotImplementedError
-                
-        #         else:
-        #             print('asym_dc')
-        #             stage_blocks.append(
-        #                 core.AsymDilatedConv(inc=self.dims[i], 
-        #                                     outc=self.asym_dims[i],
-        #                                     dilation=self.dilation[i][j]))
-                    
-        #             # print('CDC')
-        #             # stage_blocks.append(core.DilatedConv(dim=self.dims[i]//2, k=3, 
-        #             #                                      dilation=self.dilation[i][j], 
-        #             #                                      drop_path=dp_rates[cur + j],
-        #             #                                      layer_scale_init_value=layer_scale_init_value,
-        #             #                                      expan_ratio=expan_ratio))
-            
-        #     print(' ')
-        #     self.stages.append(nn.Sequential(*stage_blocks))
-        #     cur += self.depth[i]
+        self.stages.append(nn.Sequential(*stage_blocks))        
 
         self.apply(self._init_weights)
 
@@ -194,38 +160,36 @@ class LiteMono(nn.Module):
         ds2 = torch.cat((ds2, x_down2), dim=1)
 
         """(32, 48, 160)"""
-        ds4 = self.ds_conv1(ds2)
+        ds4 = self.ds_conv1(ds2) # StandardConv(stride = 2)
         # ds4 = self.dw_conv(ds2)
         ds4 = self.cghost_layer(ds4)
 
         """(64, 24, 80)"""
-        ds8 = self.ds_conv2(ds4)
+        ds8 = self.ds_conv2(ds4) # StandardConv(stride = 2)
         ds8_core = self.cghost2_layer(ds8)
 
         for s in range(len(self.stages[0])-1):
-            ds8_core = self.stages[0][s](ds8_core)
-        ds8_core = self.stages[0][-1](ds8_core)
+            ds8_core = self.stages[0][s](ds8_core) #Asymmblock
+        ds8_core = self.stages[0][-1](ds8_core) #LGFI
         
         """(35, 48, 160)"""
         concat_ds4 = torch.cat([ds4, x_down4], dim=1)
         """(64, 24, 80)"""
-        ds8_core2 = self.downsample_layer2(concat_ds4)
+        ds8_core2 = self.downsample_layer2(concat_ds4) # StandardConv(stride = 2)
         ds8_core2 = torch.add(ds8_core, ds8_core2)
-        # """(96, 24, 80)"""
-        # ds8_core2 = self.exp_conv(ds8_2)
         
         """(64, 24, 80)"""
         for s in range(len(self.stages[1])-1):
-            ds8_core2 = self.stages[1][s](ds8_core2)
-        ds8_core2 = self.stages[1][-1](ds8_core2)
+            ds8_core2 = self.stages[1][s](ds8_core2) #Asymmblock
+        ds8_core2 = self.stages[1][-1](ds8_core2) #LGFI
         
         """(131, 24, 80)"""
         concat_ds8 = torch.cat([ds8_core, ds8_core2, x_down8], dim=1)
         """(128, 12, 40)"""
-        ds16_core = self.downsample_layer3(concat_ds8)
+        ds16_core = self.downsample_layer3(concat_ds8) # StandardConv(stride = 2)
         
         for s in range(len(self.stages[2]) - 1):
-            ds16_core = self.stages[2][s](ds16_core)
-        ds16_core = self.stages[2][-1](ds16_core)
+            ds16_core = self.stages[2][s](ds16_core) #Asymmblock
+        ds16_core = self.stages[2][-1](ds16_core) #LGFI
         
         return ds4, ds8_core2, ds16_core
