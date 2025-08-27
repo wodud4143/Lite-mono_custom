@@ -25,28 +25,22 @@ class LiteMono(nn.Module):
                  heads=[8, 8, 8], use_pos_embd_xca=[True, False, False], **kwargs):
         super().__init__()
 
-        # if model == 'lite-mono':
-        # self.num_ch_enc = np.array([48, 80, 128])
         self.num_ch_enc = np.array([32, 64, 128])
-        self.depth = [4, 4, 10]
-        # self.dims = [48, 80, 128]
+        # self.depth = [4, 4, 10]
+        self.depth = [3, 3, 4]
         self.dims = [32, 64, 128]
         self.asym_dims = [64, 96, 128]
 
         if height == 192 and width == 640:
             self.dilation = [[1, 2], [1, 3], [1, 4, 6]]
-            # self.dilation = [[1, 2, 3], [1, 2, 3], [1, 2, 3, 1, 2, 3, 2, 4, 6]]
-            # self.dilation = [[1, 1, 2], [1, 1, 2], [1, 1, 2, 1, 1, 2, 1, 2, 3]]
-        elif height == 320 and width == 1024:
-            self.dilation = [[1, 2, 5], [1, 2, 5], [1, 2, 5, 1, 2, 5, 2, 4, 10]]
 
         for g in global_block_type:
             assert g in ['None', 'LGFI']
 
 
-        self.avg_pool2 = clayers.AvgPool(ratio=2)
-        self.avg_pool4 = clayers.AvgPool(ratio=4)
-        self.avg_pool8 = clayers.AvgPool(ratio=8)
+        self.avg_pool2 = clayers.AvgPool(ratio=2) # 1/2
+        self.avg_pool4 = clayers.AvgPool(ratio=4) # 1/4
+        self.avg_pool8 = clayers.AvgPool(ratio=8) # 1/8
 
         
         self.init_conv = nn.Sequential(
@@ -79,8 +73,6 @@ class LiteMono(nn.Module):
                                  bn_act=False)
         )
         
-        # self.exp_conv = clayers.StandardConv(self.dims[1], self.dims[2],
-        #                                     kernel_size=1, stride=1, padding=0, bn_act=False)
         
         self.downsample_layer3 = nn.Sequential(
             clayers.StandardConv(self.dims[1]*2+3, self.dims[2], 
@@ -193,3 +185,4 @@ class LiteMono(nn.Module):
         ds16_core = self.stages[2][-1](ds16_core) #LGFI
         
         return ds4, ds8_core2, ds16_core
+

@@ -1,54 +1,45 @@
-import cv2
+import os
+import re
+import shutil
+import networks
 
-# === 입력 파일 경로 ===
-video_path1 = r'C:\Users\wodud\OneDrive\Desktop\도로주행 데이터\새 폴더 (2)\test3.mp4'
-video_path2 = r'C:\Users\wodud\OneDrive\Desktop\도로주행 데이터\새 폴더 (2)\litemono3.mp4'
-output_path = r'C:\Users\wodud\OneDrive\Desktop\도로주행 데이터\새 폴더 (2)\video3.mp4'
+def save_network(modelname,dir) :
 
-# === 비디오 캡처 열기 ===
-cap1 = cv2.VideoCapture(video_path1)
-cap2 = cv2.VideoCapture(video_path2)
+    # networks 패키지 경로
+    NETWORKS_DIR = os.path.dirname(networks.__file__)
+    INIT_FILE = os.path.join(NETWORKS_DIR, "__init__.py")
 
-# === 최소 프레임 수로 동기화 ===
-frame_count = int(min(cap1.get(cv2.CAP_PROP_FRAME_COUNT), cap2.get(cv2.CAP_PROP_FRAME_COUNT)))
+    # 목적지 경로
+    TARGET_DIR = dir
+    os.makedirs(TARGET_DIR, exist_ok=True)
 
-# === 공통 프레임 크기 맞추기 (가로 크기 기준으로 통일) ===
-width1 = int(cap1.get(cv2.CAP_PROP_FRAME_WIDTH))
-height1 = int(cap1.get(cv2.CAP_PROP_FRAME_HEIGHT))
-width2 = int(cap2.get(cv2.CAP_PROP_FRAME_WIDTH))
-height2 = int(cap2.get(cv2.CAP_PROP_FRAME_HEIGHT))
 
-target_width = min(width1, width2)
-resize1 = (target_width, int(height1 * target_width / width1))
-resize2 = (target_width, int(height2 * target_width / width2))
+    name = modelname
 
-# === 병합 후 프레임 크기 설정 ===
-out_height = resize1[1] + resize2[1]
-out_width = target_width
+    # 복사할 클래스와 새 파일명 매핑
+    targets = {
+        "LiteMono": f"{name}_encoder.py",
+        "DepthDecoder": f"{name}_decoder.py"
+    }
 
-fps = cap1.get(cv2.CAP_PROP_FPS)
-fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-out = cv2.VideoWriter(output_path, fourcc, fps, (out_width, out_height))
+    # __init__.py 읽기
+    with open(INIT_FILE, "r", encoding="utf-8") as f:
+        lines = f.readlines()
 
-# === 병합 실행 ===
-for _ in range(frame_count):
-    ret1, frame1 = cap1.read()
-    ret2, frame2 = cap2.read()
-    if not ret1 or not ret2:
-        break
+    # 주석 아닌 줄만 필터링
+    active_lines = [line for line in lines if not line.strip().startswith("#")]
 
-    # 리사이징
-    frame1 = cv2.resize(frame1, resize1)
-    frame2 = cv2.resize(frame2, resize2)
+    # 정규식: from .파일 import 클래스
+    pattern = re.compile(r"from \.(\w+) import (\w+)")
+    matches = [pattern.search(line).groups() for line in active_lines if pattern.search(line)]
 
-    # 수직 스택
-    combined = cv2.vconcat([frame1, frame2])
-
-    # 저장
-    out.write(combined)
-
-# === 정리 ===
-cap1.release()
-cap2.release()
-out.release()
-print("✅ 저장 완료:", output_path)
+    # 대상 클래스만 찾아서 복사
+    for fname, cls in matches:
+        if cls in targets:
+            src_path = os.path.join(NETWORKS_DIR, f"{fname}.py")
+            dst_path = os.path.join(TARGET_DIR, targets[cls])
+            if os.path.exists(src_path):
+                shutil.copy2(src_path, dst_path)
+                print(f"{cls} 정의된 {fname}.py → {dst_path} 로 복사 완료")
+            else:
+                print(f"⚠ {fname}.py 없음 (건너뜀)")

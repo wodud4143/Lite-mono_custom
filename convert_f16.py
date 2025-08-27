@@ -149,15 +149,13 @@ def main():
 
 if __name__ == "__main__":
     device = 'cuda'
-    model_type = 'lite_v4'
+    model_type = 'lite_mono'
     exp_dir = osp.join(osp.dirname(__file__), "experiments\logs")
 
     enc_model = 'encoder.pth'
     dec_model = 'depth.pth'
     
-    # enc_model_path = osp.join(exp_dir,model_type,'models','weights_10', enc_model)
-    # dec_model_path = osp.join(exp_dir,model_type,'models','weights_10', dec_model)
-    enc_model_path = r"C:\Users\wodud\OneDrive\Desktop\Lite-mono_custom\experiments\logs\lite_v4\models\weights_49\encoder.pth"
-    dec_model_path = r"C:\Users\wodud\OneDrive\Desktop\Lite-mono_custom\experiments\logs\lite_v4\models\weights_49\depth.pth"
+    enc_model_path = r"C:\Users\wodud\OneDrive\Desktop\Lite-mono_custom\experiments\logs\lite_mono_scratch\models\weights_49\encoder.pth"
+    dec_model_path = r"C:\Users\wodud\OneDrive\Desktop\Lite-mono_custom\experiments\logs\lite_mono_scratch\models\weights_49\depth.pth"
     main()
     # infer_pth()

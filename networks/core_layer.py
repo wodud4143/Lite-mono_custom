@@ -5,8 +5,8 @@ import torch
 import torch.nn.functional as F
 from torch import cat, nn
 from networks import custom_layers as clayers
-
-
+from timm.models.layers import DropPath, to_2tuple, trunc_normal_
+from functools import partial
 
 
 class PositionalEncodingFourier(nn.Module):
@@ -166,6 +166,51 @@ class AsymDilatedConv(nn.Module):
         
         return x
     
+# class AsymDilatedConv(nn.Module):
+#     def __init__(self, inc, outc, dilation, drop_path=0.0, residual=False):
+#         super().__init__()
+#         self.residual = residual
+#         self.drop_path = DropPath(drop_path) if drop_path > 0 else nn.Identity()
+        
+#         self.expansion_conv = nn.Conv2d(inc, outc, kernel_size=1)
+        
+#         self.conv1x3 = nn.Conv2d(outc, outc, 
+#                                  kernel_size=(1, 3),
+#                                  padding=(0, 1))
+#         self.conv3x1 = nn.Conv2d(outc, outc, 
+#                                  kernel_size=(3, 1),
+#                                  padding=(1, 0))
+#         self.conv3x3 = nn.Conv2d(outc, outc, 
+#                                  kernel_size=3,
+#                                  padding=dilation,
+#                                  dilation=dilation)
+#         self.bn1 = nn.BatchNorm2d(outc)
+#         self.act = nn.GELU()
+        
+#         self.reduction_conv = nn.Conv2d(outc, inc, kernel_size=1)
+#         self.bn2 = nn.BatchNorm2d(inc)
+    
+#     def forward(self, x):
+#         # 채널 확장 (64 -> 128 -> 256)
+#         identity = x
+#         x = self.expansion_conv(x)
+        
+#         x = self.conv1x3(x)
+#         x = self.conv3x1(x)
+        
+#         x = self.conv3x3(x)
+#         x = self.bn1(x)
+#         x = self.act(x)
+        
+#         x = self.reduction_conv(x)
+#         x = self.bn2(x)
+        
+#         if self.residual:
+#             x = identity + self.drop_path(x)
+#             return self.act(x)        
+#         else:
+#             return self.act(x)  
+            
 
 # region - Dilated
 class DilatedConv(nn.Module):
@@ -309,153 +354,135 @@ class CustomGhostModule(nn.Module):
         
         return x_3x3
     
-# region - IB
-# class InvertedBottleneck(nn.Module):
-#     def __init__(self, in_channels, out_channels, expansion=6, kernel_size=3, stride=1, dilation=1, bn_act=False):
-#         super().__init__()
-#         self.use_residual = (stride == 1 and in_channels == out_channels)
-#         hidden_dim = in_channels * expansion
+# region - [MiTBlock]
 
-#         self.expand = nn.Sequential(
-#             nn.Conv2d(in_channels, hidden_dim, kernel_size=1, bias=False),
-#             nn.BatchNorm2d(hidden_dim)
-#             # nn.ReLU6(inplace=True)
-#         ) if expansion != 1 else nn.Identity()
+class DWConv(nn.Module):
+    def __init__(self, dim=768):
+        super(DWConv, self).__init__()
+        self.dwconv = nn.Conv2d(dim, dim, 3, 1, 1, bias=True, groups=dim)
 
-#         self.depthwise = nn.Sequential(
-#             nn.Conv2d(hidden_dim, hidden_dim, 
-#                       kernel_size=kernel_size, stride=stride,
-#                       padding=(kernel_size//2)*dilation,
-#                       dilation=dilation, groups=hidden_dim, bias=False),
-#             nn.BatchNorm2d(hidden_dim)
-#             # nn.ReLU6(inplace=True)
-#         )
+    def forward(self, x, H, W):
+        B, N, C = x.shape
+        x = x.transpose(1, 2).view(B, C, H, W)
+        x = self.dwconv(x)
+        x = x.flatten(2).transpose(1, 2)
 
-#         self.project = nn.Sequential(
-#             nn.Conv2d(hidden_dim, out_channels, kernel_size=1, bias=False),
-#             nn.BatchNorm2d(out_channels),
-#             nn.ReLU6(inplace=True)
-#         )
+        return x
 
-#         self.bn_act = bn_act
-#         if self.bn_act:
-#             self.act = BNRELU(out_channels)
+class Mlp(nn.Module):
+    def __init__(self, in_features, hidden_features=None, out_features=None, act_layer=nn.GELU, drop=0.):
+        super().__init__()
+        out_features = out_features or in_features
+        hidden_features = hidden_features or in_features
+        self.fc1 = nn.Linear(in_features, hidden_features)
+        self.dwconv = DWConv(hidden_features)
+        self.act = act_layer()
+        self.fc2 = nn.Linear(hidden_features, out_features)
+        self.drop = nn.Dropout(drop)
 
-#     def forward(self, x):
-#         residual = x
-#         out = self.expand(x)
-#         out = self.depthwise(out)
-#         out = self.project(out)
+        self.apply(self._init_weights)
 
-#         if self.use_residual:
-#             out = out + residual
-            
+    def _init_weights(self, m):
+        if isinstance(m, nn.Linear):
+            trunc_normal_(m.weight, std=.02)
+            if isinstance(m, nn.Linear) and m.bias is not None:
+                nn.init.constant_(m.bias, 0)
+        elif isinstance(m, nn.LayerNorm):
+            nn.init.constant_(m.bias, 0)
+            nn.init.constant_(m.weight, 1.0)
+        elif isinstance(m, nn.Conv2d):
+            fan_out = m.kernel_size[0] * m.kernel_size[1] * m.out_channels
+            fan_out //= m.groups
+            m.weight.data.normal_(0, math.sqrt(2.0 / fan_out))
+            if m.bias is not None:
+                m.bias.data.zero_()
 
-#         if self.bn_act:
-#             out = self.act(out)
-
-#         return out
-
-
-# class DownsampleBlock(nn.Module):
-#     def __init__(self, in_channels, expansion_ratio=2):
-#         super().__init__()
-#         out_channels = in_channels * expansion_ratio
-
-#         self.down = nn.Sequential(
-#             nn.Conv2d(in_channels, out_channels, kernel_size=3, stride=2, padding=1, bias=False),
-#             nn.BatchNorm2d(out_channels),
-#             nn.ReLU(inplace=True)
-#         )
-
-#         self.project = nn.Sequential(
-#             nn.Conv2d(out_channels, in_channels, kernel_size=1, stride=1, bias=False),
-#             nn.BatchNorm2d(in_channels),
-#             nn.ReLU(inplace=True)
-#         )
-
-#     def forward(self, x):
-#         x= self.down(x)
-#         x = self.project(x)
-        
-#         return x
-    
-
-"""--------------------Coordinate Attention--------------------------------------"""    
-# region coordinate attention 
-# class h_sigmoid(nn.Module):
-#     def __init__(self, inplace=True):
-#         super(h_sigmoid, self).__init__()
-#         self.relu = nn.ReLU6(inplace=inplace)
-
-#     def forward(self, x):
-#         return self.relu(x + 3) / 6
-
-# class h_swish(nn.Module):
-#     def __init__(self, inplace=True):
-#         super(h_swish, self).__init__()
-#         self.sigmoid = h_sigmoid(inplace=inplace)
-
-#     def forward(self, x):
-#         return x * self.sigmoid(x)
+    def forward(self, x, H, W):
+        x = self.fc1(x)
+        x = self.dwconv(x, H, W)
+        x = self.act(x)
+        x = self.drop(x)
+        x = self.fc2(x)
+        x = self.drop(x)
+        return x
 
 
-# class HardSwish(nn.Module):
-#     def __init__(self, inplace=False):
-#         super(HardSwish, self).__init__()
-#         self.inplace = inplace
+class Attention(nn.Module):
+    def __init__(self, dim, num_heads=8, qkv_bias=False, qk_scale=None, attn_drop=0., proj_drop=0., sr_ratio=1):
+        super().__init__()
+        assert dim % num_heads == 0, f"dim {dim} should be divided by num_heads {num_heads}."
 
-#     def forward(self, x):
-#         return x * F.relu6(x + 3., inplace=self.inplace) / 6.
+        self.dim = dim
+        self.num_heads = num_heads
+        head_dim = dim // num_heads
+        self.scale = qk_scale or head_dim ** -0.5
 
+        self.q = nn.Linear(dim, dim, bias=qkv_bias)
+        self.kv = nn.Linear(dim, dim * 2, bias=qkv_bias)
+        self.attn_drop = nn.Dropout(attn_drop)
+        self.proj = nn.Linear(dim, dim)
+        self.proj_drop = nn.Dropout(proj_drop)
 
-# class HardSigmoid(nn.Module):
-#     def __init__(self, inplace=False):
-#         super(HardSigmoid, self).__init__()
-#         self.inplace = inplace
+        self.sr_ratio = sr_ratio
+        if sr_ratio > 1:
+            self.sr = nn.Conv2d(dim, dim, kernel_size=sr_ratio, stride=sr_ratio)
+            self.norm = nn.LayerNorm(dim)
 
-#     def forward(self, x):
-#         return F.relu6(x + 3., inplace=self.inplace) / 6.
+        self.apply(self._init_weights)
 
+    def _init_weights(self, m):
+        if isinstance(m, nn.Linear):
+            trunc_normal_(m.weight, std=.02)
+            if isinstance(m, nn.Linear) and m.bias is not None:
+                nn.init.constant_(m.bias, 0)
+        elif isinstance(m, nn.LayerNorm):
+            nn.init.constant_(m.bias, 0)
+            nn.init.constant_(m.weight, 1.0)
+        elif isinstance(m, nn.Conv2d):
+            fan_out = m.kernel_size[0] * m.kernel_size[1] * m.out_channels
+            fan_out //= m.groups
+            m.weight.data.normal_(0, math.sqrt(2.0 / fan_out))
+            if m.bias is not None:
+                m.bias.data.zero_()
 
-# class Activation(nn.Module):
-#     def __init__(self, act_func):
-#         super(Activation, self).__init__()
-#         if act_func == "relu":
-#             self.act = nn.ReLU()
-#         elif act_func == "relu6":
-#             self.act = nn.ReLU6()
-#         elif act_func == "hard_sigmoid":
-#             self.act = HardSigmoid()
-#         elif act_func == "hard_swish":
-#             self.act = HardSwish()
-#         else:
-#             raise NotImplementedError
+    def forward(self, x, H, W):
+        B, N, C = x.shape
+        q = self.q(x).reshape(B, N, self.num_heads, C // self.num_heads).permute(0, 2, 1, 3)
 
-#     def forward(self, x):
-#         return self.act(x)
+        if self.sr_ratio > 1:
+            x_ = x.permute(0, 2, 1).reshape(B, C, H, W)
+            x_ = self.sr(x_).reshape(B, C, -1).permute(0, 2, 1)
+            x_ = self.norm(x_)
+            kv = self.kv(x_).reshape(B, -1, 2, self.num_heads, C // self.num_heads).permute(2, 0, 3, 1, 4)
+        else:
+            kv = self.kv(x).reshape(B, -1, 2, self.num_heads, C // self.num_heads).permute(2, 0, 3, 1, 4)
+        k, v = kv[0], kv[1]
 
+        attn = (q @ k.transpose(-2, -1)) * self.scale
+        attn = attn.softmax(dim=-1)
+        attn = self.attn_drop(attn)
 
-# def make_divisible(x, divisible_by=8):
-#     return int(math.ceil(x * 1. / divisible_by) * divisible_by)
+        x = (attn @ v).transpose(1, 2).reshape(B, N, C)
+        x = self.proj(x)
+        x = self.proj_drop(x)
 
+        return x
 
-# class _BasicUnit(nn.Module):
-#     def __init__(self, num_in, num_out, kernel_size=1, strides=1, pad=0, num_groups=1,
-#                  use_act=True, act_type="relu", norm_layer=nn.BatchNorm2d):
-#         super(_BasicUnit, self).__init__()
-#         self.use_act = use_act
-#         self.conv = nn.Conv2d(in_channels=num_in, out_channels=num_out,
-#                               kernel_size=kernel_size, stride=strides,
-#                               padding=pad, groups=num_groups, bias=False,
-#                               )
-#         self.bn = norm_layer(num_out)
-#         if use_act is True:
-#             self.act = Activation(act_type)
+class MiTBlock(nn.Module):
+    def __init__(self, dim, num_heads, mlp_ratio=4., qkv_bias=True, drop=0., attn_drop=0.,
+                 drop_path=0., act_layer=nn.GELU, norm_layer=partial(nn.LayerNorm, eps=1e-6), sr_ratio=1):
+        super().__init__()
+        self.norm1 = norm_layer(dim)
+        self.attn  = Attention(dim, num_heads=num_heads, qkv_bias=qkv_bias,
+                               attn_drop=attn_drop, proj_drop=drop, sr_ratio=sr_ratio)
+        self.drop_path = DropPath(drop_path) if drop_path > 0. else nn.Identity()
+        self.norm2 = norm_layer(dim)
+        self.mlp = Mlp(in_features=dim, hidden_features=int(dim*mlp_ratio),
+                       act_layer=act_layer, drop=drop)
 
-#     def forward(self, x):
-#         out = self.conv(x)
-#         out = self.bn(out)
-#         if self.use_act:
-#             out = self.act(out)
-#         return out
+    def forward(self, x):  # x: (B,C,H,W)
+        B, C, H, W = x.shape
+        y = x.permute(0, 2, 3, 1).reshape(B, H * W, C)
+        y = y + self.drop_path(self.attn(self.norm1(y), H, W))  # (B,N,C)
+        y = y + self.drop_path(self.mlp(self.norm2(y), H, W))   # (B,N,C)
+        return y.transpose(1, 2).reshape(B, C, H, W)            # (B,C,H,W)

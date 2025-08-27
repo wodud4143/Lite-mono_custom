@@ -103,11 +103,11 @@ def main():
 
 if __name__ == "__main__":
     
-    model_type = 'CBAM'
+    model_type = 'lite_v4'
     test_image_dir = r"C:\Users\wodud\OneDrive\Desktop\Lite-mono_custom\kitti_data\2011_09_26\2011_09_26_drive_0001_sync\image_02\data"
     test_image_paths = glob(osp.join(test_image_dir, "*.png"))
     
-    engine_path = osp.join("onnx_output", f'optimized_{model_type}.engine')
+    engine_path = osp.join("onnx_output", f'optimized_{model_type}_fp16.engine')
 
     
     main()

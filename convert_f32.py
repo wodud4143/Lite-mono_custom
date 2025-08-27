@@ -1,494 +1,323 @@
-# import torch
-# import torch.nn as nn
-# import numpy as np
-# import os
-# import time
-# from pathlib import Path
-
-# # 원본 모듈들 임포트
-# import networks
-# from layers import disp_to_depth
-
-# # TensorRT 관련
-# import tensorrt as trt
-# import pycuda.driver as cuda
-# import pycuda.autoinit
-
-# class LiteMonoTensorRTJetPack:
-    
-#     def __init__(self, weights_folder, model_type="lite-mono"):
-#         self.weights_folder = weights_folder
-#         self.model_type = model_type
-#         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        
-#         # TensorRT 버전 확인
-#         print(f"TensorRT 버전: {trt.__version__}")
-#         print(f"PyTorch 버전: {torch.__version__}")
-        
-#         # 모델 정보 로드
-#         self._load_model_info()
-        
-#     def _load_model_info(self):
-#         """모델 정보 및 가중치 로드"""
-#         encoder_path = os.path.join(self.weights_folder, "encoder.pth")
-#         decoder_path = os.path.join(self.weights_folder, "depth.pth")
-        
-#         if not os.path.exists(encoder_path) or not os.path.exists(decoder_path):
-#             raise FileNotFoundError(f"모델 파일을 찾을 수 없습니다: {self.weights_folder}")
-        
-#         # 모델 딕셔너리 로드
-#         self.encoder_dict = torch.load(encoder_path, map_location=self.device)
-#         self.decoder_dict = torch.load(decoder_path, map_location=self.device)
-        
-#         # 입력 크기 정보
-#         self.feed_height = self.encoder_dict['height']
-#         self.feed_width = self.encoder_dict['width']
-        
-#         print(f"모델 입력 크기: {self.feed_width} x {self.feed_height}")
-        
-#     def create_pytorch_model(self):
-#         """PyTorch 통합 모델 생성"""
-        
-#         # 인코더 생성
-#         encoder = networks.LiteMono(
-#             model=self.model_type,
-#             height=self.feed_height,
-#             width=self.feed_width
-#         )
-        
-#         # 인코더 가중치 로드
-#         model_dict = encoder.state_dict()
-#         encoder.load_state_dict({k: v for k, v in self.encoder_dict.items() if k in model_dict})
-        
-#         # 디코더 생성
-#         depth_decoder = networks.DepthDecoder(encoder.num_ch_enc, scales=range(3))
-        
-#         # 디코더 가중치 로드
-#         depth_model_dict = depth_decoder.state_dict()
-#         depth_decoder.load_state_dict({k: v for k, v in self.decoder_dict.items() if k in depth_model_dict})
-        
-#         # 통합 모델 클래스
-#         class LiteMonoComplete(nn.Module):
-#             def __init__(self, encoder, decoder):
-#                 super().__init__()
-#                 self.encoder = encoder
-#                 self.decoder = decoder
-            
-#             def forward(self, x):
-#                 # 인코더로 특징 추출
-#                 features = self.encoder(x)
-#                 # 디코더로 깊이 예측
-#                 outputs = self.decoder(features)
-#                 # disparity만 반환
-#                 return outputs[("disp", 0)]
-        
-#         # 통합 모델 생성
-#         complete_model = LiteMonoComplete(encoder, depth_decoder)
-#         complete_model.to(self.device)
-#         complete_model.eval()
-        
-#         return complete_model
-
-#     def convert_to_tensorrt_engine(self, engine_path, use_fp16=False):
-        
-        
-#         try:
-#             # 1. PyTorch → ONNX (임시 파일)
-#             temp_onnx_path = "proposal3.onnx"
-#             input_shape = (1, 3, self.feed_height, self.feed_width)
-            
-#             if not self._pytorch_to_onnx(pytorch_model, temp_onnx_path, input_shape):
-#                 return False
-            
-#             # # 2. ONNX → TensorRT Engine
-#             success = self._onnx_to_tensorrt_jetpack(temp_onnx_path, engine_path, use_fp16)
-            
-#             # # 3. 임시 파일 정리
-#             if os.path.exists(temp_onnx_path):
-#                 os.remove(temp_onnx_path)
-#                 print("임시 ONNX 파일 삭제됨")
-            
-#             return success
-            
-#         except Exception as e:
-#             print(f"TensorRT Engine 변환 실패: {e}")
-#             import traceback
-#             traceback.print_exc()
-#             return False
-
-#     def _pytorch_to_onnx(self, pytorch_model, onnx_path, input_shape):
-#         """PyTorch → ONNX 변환"""
-        
-#         print("1. PyTorch → ONNX 변환 중...")
-        
-#         try:
-#             # 더미 입력 생성
-#             dummy_input = torch.randn(input_shape).to(self.device)
-            
-#             # ONNX 내보내기 
-#             torch.onnx.export(
-#                 pytorch_model,
-#                 dummy_input,
-#                 onnx_path,
-#                 export_params=True,
-#                 opset_version=11,  
-#                 do_constant_folding=True,
-#                 input_names=['input'],
-#                 output_names=['output'],
-#                 dynamic_axes=None,  # 고정 크기만 사용 (adaptive pooling 문제)
-#                 verbose=False,
-#                 keep_initializers_as_inputs=False,
-#                 export_modules_as_functions=False
-#             )
-            
-#             print("ONNX 변환 성공")
-#             return True
-            
-#         except Exception as e:
-#             print(f"ONNX 변환 실패: {e}")
-#             # Adaptive pooling 문제가 있을 경우 opset 다운그레이드
-#             try:
-
-#                 torch.onnx.export(
-#                     pytorch_model,
-#                     dummy_input,
-#                     onnx_path,
-#                     export_params=True,
-#                     opset_version=11,
-#                     do_constant_folding=True,
-#                     input_names=['input'],
-#                     output_names=['output'],
-#                     dynamic_axes=None,
-#                     verbose=False
-#                 )
-#                 print("ONNX 변환 성공 (opset 11)")
-#                 return True
-#             except Exception as e2:
-#                 print(f"ONNX 변환 실패: {e2}")
-#                 return False
-
-#     def _onnx_to_tensorrt_jetpack(self, onnx_path, engine_path, use_fp16=False):
-#         """ONNX → TensorRT Engine"""
-        
-#         print("2. ONNX → TensorRT Engine 변환 중...")
-        
-#         try:
-#             # TensorRT 10.x 로거
-#             TRT_LOGGER = trt.Logger(trt.Logger.WARNING)
-            
-#             # 빌더 생성
-#             builder = trt.Builder(TRT_LOGGER)
-            
-#             # 네트워크 정의 생성 (explicit batch)
-#             network_flags = 1 << int(trt.NetworkDefinitionCreationFlag.EXPLICIT_BATCH)
-#             network = builder.create_network(network_flags)
-            
-#             # 빌더 설정
-#             config = builder.create_builder_config()
-            
-            
-#             try:
-#                 # TensorRT 10.x 방식
-#                 config.set_memory_pool_limit(trt.MemoryPoolType.WORKSPACE, 1 << 30)  # 1GB
-#                 print("TensorRT 10.x 메모리 설정 사용")
-#             except AttributeError:
-#                 # 이전 버전 호환
-#                 config.max_workspace_size = 1 << 30
-#                 print("TensorRT 이전 버전 메모리 설정 사용")
-            
-            
-            
-#             # ONNX 파서 생성
-#             parser = trt.OnnxParser(network, TRT_LOGGER)
-            
-#             # ONNX 파일 파싱
-#             print("ONNX 파일 파싱 중...")
-#             with open(onnx_path, 'rb') as model:
-#                 if not parser.parse(model.read()):
-#                     print("ONNX 파싱 실패:")
-#                     for error in range(parser.num_errors):
-#                         error_msg = parser.get_error(error)
-#                         print(f"  오류 {error}: {error_msg}")
-#                     return False
-            
-#             print("ONNX 파싱 성공")
-            
-#             # 프로파일 설정 (JetPack 6.2d에서 권장)
-#             profile = builder.create_optimization_profile()
-#             input_name = network.get_input(0).name
-#             input_shape = (1, 3, self.feed_height, self.feed_width)
-            
-#             profile.set_shape(input_name, input_shape, input_shape, input_shape)
-#             config.add_optimization_profile(profile)
-            
-#             # 엔진 빌드
-#             print("TensorRT Engine 빌드 중...")
-#             serialized_engine = builder.build_serialized_network(network, config)
-            
-#             if serialized_engine is None:
-#                 print("Engine 빌드 실패")
-#                 return False
-            
-#             # 엔진 파일 저장
-#             with open(engine_path, 'wb') as f:
-#                 f.write(serialized_engine)
-            
-#             print(f"TensorRT Engine 저장 완료: {engine_path}")
-#             return True
-            
-#         except Exception as e:
-#             print(f"TensorRT Engine 변환 실패: {e}")
-#             import traceback
-#             traceback.print_exc()
-#             return False
-
-# class JetPackTensorRTInference:
-#     """JetPack 6.2d용 TensorRT Engine 추론 클래스"""
-    
-#     def __init__(self, engine_path):
-#         """TensorRT Engine 로드"""
-        
-#         self.logger = trt.Logger(trt.Logger.WARNING)
-        
-#         # 엔진 로드
-#         print(f"TensorRT Engine 로드 중: {engine_path}")
-#         with open(engine_path, 'rb') as f:
-#             engine_data = f.read()
-        
-#         runtime = trt.Runtime(self.logger)
-#         self.engine = runtime.deserialize_cuda_engine(engine_data)
-        
-#         if self.engine is None:
-#             raise RuntimeError(f"TensorRT Engine 로드 실패: {engine_path}")
-        
-#         # 실행 컨텍스트 생성
-#         self.context = self.engine.create_execution_context()
-        
-#         # 메모리 할당
-#         self._allocate_buffers()
-        
-#         print(f"TensorRT Engine 로드 완료")
-#         print(f"입력 shape: {self.input_shape}")
-#         print(f"출력 shape: {self.output_shape}")
-    
-#     def _allocate_buffers(self):
-#         """GPU 메모리 할당"""
-        
-#         self.inputs = []
-#         self.outputs = []
-#         self.bindings = []
-#         self.stream = cuda.Stream()
-        
-#         for i in range(self.engine.num_io_tensors):
-#             tensor_name = self.engine.get_tensor_name(i)
-            
-#             if self.engine.get_tensor_mode(tensor_name) == trt.TensorIOMode.INPUT:
-#                 # 입력 텐서
-#                 self.input_shape = self.engine.get_tensor_shape(tensor_name)
-#                 dtype = trt.nptype(self.engine.get_tensor_dtype(tensor_name))
-#                 size = trt.volume(self.input_shape)
-                
-#                 # 메모리 할당
-#                 host_mem = cuda.pagelocked_empty(size, dtype)
-#                 device_mem = cuda.mem_alloc(host_mem.nbytes)
-                
-#                 self.inputs.append({'host': host_mem, 'device': device_mem, 'name': tensor_name})
-                
-#             else:
-#                 # 출력 텐서
-#                 self.output_shape = self.engine.get_tensor_shape(tensor_name)
-#                 dtype = trt.nptype(self.engine.get_tensor_dtype(tensor_name))
-#                 size = trt.volume(self.output_shape)
-                
-#                 # 메모리 할당
-#                 host_mem = cuda.pagelocked_empty(size, dtype)
-#                 device_mem = cuda.mem_alloc(host_mem.nbytes)
-                
-#                 self.outputs.append({'host': host_mem, 'device': device_mem, 'name': tensor_name})
-    
-#     def infer(self, input_data):
-#         """추론 실행 (JetPack 6.2d 호환)"""
-        
-#         # 입력 데이터를 GPU로 복사
-#         np.copyto(self.inputs[0]['host'], input_data.ravel())
-#         cuda.memcpy_htod_async(self.inputs[0]['device'], self.inputs[0]['host'], self.stream)
-        
-#         # 텐서 주소 설정 (TensorRT 10.x 방식)
-#         for inp in self.inputs:
-#             self.context.set_tensor_address(inp['name'], int(inp['device']))
-#         for out in self.outputs:
-#             self.context.set_tensor_address(out['name'], int(out['device']))
-        
-#         # 추론 실행
-#         self.context.execute_async_v3(stream_handle=self.stream.handle)
-        
-#         # 결과를 CPU로 복사
-#         cuda.memcpy_dtoh_async(self.outputs[0]['host'], self.outputs[0]['device'], self.stream)
-#         self.stream.synchronize()
-        
-#         # 결과 반환
-#         return self.outputs[0]['host'].reshape(self.output_shape)
-
-# def main():
-#     """메인 실행 함수"""
-    
-#     # 설정
-#     weights_folder = "./liteweight"
-#     output_dir = "./tensorrt_output"
-#     model_type = "lite-mono"
-#     use_fp16 = True  # Jetson에서는 FP16 권장
-    
-#     # 출력 디렉토리 생성
-#     os.makedirs(output_dir, exist_ok=True)
-    
-#     # 파일 경로
-#     engine_path = os.path.join(output_dir, "litemono_f32.engine")
-    
-#     try:
-#         # 1. TensorRT Engine 변환기 생성
-#         print("=== JetPack 6.2d Lite-Mono TensorRT Engine 변환 시작 ===")
-#         converter = LiteMonoTensorRTJetPack(weights_folder, model_type)
-        
-#         # # 2. PyTorch 모델 생성
-#         # print("\n=== PyTorch 모델 생성 ===")
-#         # pytorch_model = converter.create_pytorch_model()
-#         # print("PyTorch 모델 생성 완료")
-        
-#         # 3. PyTorch → TensorRT Engine 변환
-#         print(f"\n=== PyTorch → TensorRT Engine 변환 ===")
-#         success = converter.convert_to_tensorrt_engine(engine_path, use_fp16)
-        
-#         if not success:
-#             print("TensorRT Engine 변환 실패")
-#             return
-        
-#         # 4. 간단한 추론 테스트
-#         print(f"\n=== 추론 테스트 ===")
-#         try:
-#             inference = JetPackTensorRTInference(engine_path)
-            
-#             # 테스트 데이터
-#             test_input = np.random.randn(1, 3, converter.feed_height, converter.feed_width).astype(np.float32)
-            
-#             # 추론 실행
-#             start_time = time.time()
-#             result = inference.infer(test_input)
-#             end_time = time.time()
-            
-#             print(f"추론 시간: {(end_time - start_time) * 1000:.2f} ms")
-#             print(f"출력 shape: {result.shape}")
-#             print("추론 테스트 성공")
-            
-#         except Exception as e:
-#             print(f"추론 테스트 실패: {e}")
-        
-#         print(f"\n=== 변환 완료===")
-#         print(f"TensorRT Engine 파일: {engine_path}")
-#         print(f"Engine 파일 크기: {os.path.getsize(engine_path) / (1024*1024):.2f} MB")
-        
-#     except Exception as e:
-#         print(f"오류 발생: {e}")
-#         import traceback
-#         traceback.print_exc()
-
-# if __name__ == "__main__":
-#     main()
-
-
-
-
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+LiteMono Encoder+Decoder 체크포인트 → ONNX → TensorRT 엔진(FP32/FP16/INT8) 변환 스크립트
+- FP32, FP16 항상 시도
+- INT8 은 보정 이미지가 있을 때만(EntropyCalibrator2). PyCUDA가 없으면 INT8 스킵
+- 입력 텐서: (N,3,H,W) float32, [0,1] 스케일 가정
+"""
 import os
+import os.path as osp
+import argparse
+from glob import glob
+
+import numpy as np
+import torch
+import onnx
+import onnxoptimizer
+from onnx import numpy_helper
 import tensorrt as trt
 
-class OnnxToTensorRT:
-    """
-    ONNX 모델을 TensorRT 엔진으로 변환하는 유틸리티 클래스
-    JetPack 6.2d / TRT 10.x 환경에 맞춤
-    """
-    def __init__(self, workspace_size=1<<30):
-        self.logger = trt.Logger(trt.Logger.WARNING)
-        # 빌더 설정
-        self.builder = trt.Builder(self.logger)
-        self.config = self.builder.create_builder_config()
-        # 워크스페이스 메모리 제한 (예: 1GB)
+from PIL import Image
+from torchvision import transforms
+
+import networks
+
+# =============================
+# 모델 래퍼
+# =============================
+class FullModel(torch.nn.Module):
+    def __init__(self, encoder, decoder):
+        super().__init__()
+        self.encoder = encoder
+        self.decoder = decoder
+
+    def forward(self, x):
+        encoded = self.encoder(x)
+        out = self.decoder(encoded)
+        disp = out[("disp", 0)]  # (N,1,H,W)
+        return disp
+
+
+def custom_load_state_dict(loaded_enc, loaded_dec, height=192, width=640, device="cpu"):
+    with torch.no_grad():
+        encoder = networks.LiteMono(model="lite-mono", drop_path_rate=0.2, width=width, height=height)
+        decoder = networks.DepthDecoder(encoder.num_ch_enc, scales=[0, 1, 2])
+
+        enc_state_dict, dec_state_dict = encoder.state_dict(), decoder.state_dict()
+
+        encoder.load_state_dict({
+            k: v for k, v in loaded_enc.items()
+            if k in enc_state_dict and enc_state_dict[k].shape == v.shape
+        })
+        decoder.load_state_dict({
+            k: v for k, v in loaded_dec.items()
+            if k in dec_state_dict and dec_state_dict[k].shape == v.shape
+        })
+
+        encoder.to(device).eval()
+        decoder.to(device).eval()
+    return encoder, decoder
+
+# =============================
+# INT8 Calibrator (선택 사항)
+# =============================
+class _MaybeCalibrator:
+    def __init__(self):
         try:
-            self.config.set_memory_pool_limit(
-                trt.MemoryPoolType.WORKSPACE, workspace_size
-            )
-        except AttributeError:
-            # 이전 TRT 버전 호환
-            self.config.max_workspace_size = workspace_size
+            import pycuda.driver as cuda  # type: ignore
+            import pycuda.autoinit  # noqa: F401
+            self.cuda = cuda
+            self.ok = True
+        except Exception:
+            self.cuda = None
+            self.ok = False
 
-    def convert(self, onnx_path: str, engine_path: str,
-                feed_shape: tuple, use_fp16: bool = False) -> bool:
-        """
-        :param onnx_path: 변환할 ONNX 파일 경로
-        :param engine_path: 저장할 TensorRT 엔진 파일 경로
-        :param feed_shape: (batch, channel, height, width) 형식의 입력 크기
-        :param use_fp16: FP16 모드 사용 여부
-        :return: 변환 성공 여부
-        """
-        # 네트워크 생성 (explicit batch)
-        network_flags = 1 << int(trt.NetworkDefinitionCreationFlag.EXPLICIT_BATCH)
-        network = self.builder.create_network(network_flags)
-        parser = trt.OnnxParser(network, self.logger)
+class ImageBatchStream:
+    def __init__(self, image_dir, batch_size, n_batches, height, width):
+        self.paths = sorted([p for p in glob(osp.join(image_dir, "**", "*")) if p.lower().endswith((".jpg",".jpeg",".png",".bmp"))])
+        assert len(self.paths) > 0, f"보정 이미지가 없습니다: {image_dir}"
+        self.bs = batch_size
+        self.n_batches = n_batches
+        self.h, self.w = height, width
+        self.transform = transforms.Compose([
+            transforms.Resize((height, width)),
+            transforms.ToTensor(),  # [0,1]
+        ])
+        self._i = 0
 
-        # ONNX 파싱
-        with open(onnx_path, 'rb') as f:
-            if not parser.parse(f.read()):
-                print("❌ ONNX 파싱 실패")
-                for i in range(parser.num_errors):
-                    print(parser.get_error(i))
-                return False
-        print("✅ ONNX 파싱 성공")
+    def reset(self):
+        self._i = 0
 
-        # 최적화 프로파일 설정
-        profile = self.builder.create_optimization_profile()
-        input_name = network.get_input(0).name
-        profile.set_shape(input_name, feed_shape, feed_shape, feed_shape)
-        self.config.add_optimization_profile(profile)
+    def next_batch(self):
+        if self._i >= self.n_batches:
+            return None
+        imgs = []
+        for _ in range(self.bs):
+            p = self.paths[(self._i * self.bs + _) % len(self.paths)]
+            img = Image.open(p).convert("RGB")
+            t = self.transform(img)
+            imgs.append(t.unsqueeze(0))
+        self._i += 1
+        return torch.cat(imgs, dim=0).numpy().astype(np.float32)  # (B,3,H,W)
 
-        # FP16 설정
-        if use_fp16:
-            self.config.set_flag(trt.BuilderFlag.FP16)
-            print("▶️ FP16 모드 활성화")
 
-        # 엔진 빌드
-        print("⏳ TensorRT 엔진 빌드 중…")
-        serialized_engine = self.builder.build_serialized_network(network, self.config)
-        if serialized_engine is None:
-            print("❌ 엔진 빌드 실패")
-            return False
+def make_int8_calibrator(image_dir, height, width, batch_size=8, n_batches=100):
+    maybe = _MaybeCalibrator()
+    if not maybe.ok:
+        return None
 
-        # 파일로 저장
-        os.makedirs(os.path.dirname(engine_path), exist_ok=True)
-        with open(engine_path, 'wb') as f:
-            f.write(serialized_engine)
-        print(f"✅ 엔진 저장 완료: {engine_path}")
-        return True
+    cuda = maybe.cuda
+    stream = ImageBatchStream(image_dir, batch_size, n_batches, height, width)
 
+    class EntropyCalibrator(trt.IInt8EntropyCalibrator2):
+        def __init__(self):
+            super().__init__()
+            self.stream = stream
+            self.d_input = None
+            self.cache = osp.join(image_dir, f"calib_cache_H{height}_W{width}_B{batch_size}.bin")
+
+        def get_batch_size(self):
+            return self.stream.bs
+
+        def get_batch(self, names):
+            batch = self.stream.next_batch()
+            if batch is None:
+                return None
+            if self.d_input is None:
+                self.d_input = cuda.mem_alloc(batch.nbytes)
+            cuda.memcpy_htod(self.d_input, batch)
+            return [int(self.d_input)]
+
+        def read_calibration_cache(self):
+            if osp.exists(self.cache):
+                with open(self.cache, 'rb') as f:
+                    return f.read()
+            return None
+
+        def write_calibration_cache(self, cache):
+            with open(self.cache, 'wb') as f:
+                f.write(cache)
+
+    return EntropyCalibrator()
+
+# =============================
+# TensorRT 엔진 빌드
+# =============================
+
+def build_engine(onnx_file_path, precision="fp32", height=192, width=640, max_batch=8, calibrator=None):
+    TRT_LOGGER = trt.Logger(trt.Logger.WARNING)
+
+    builder = trt.Builder(TRT_LOGGER)
+    network_flags = 1 << int(trt.NetworkDefinitionCreationFlag.EXPLICIT_BATCH)
+    network = builder.create_network(network_flags)
+
+    parser = trt.OnnxParser(network, TRT_LOGGER)
+    with open(onnx_file_path, 'rb') as f:
+        if not parser.parse(f.read()):
+            for i in range(parser.num_errors):
+                print("ONNX Parse Error:", parser.get_error(i))
+            raise RuntimeError("ONNX 파싱 실패")
+
+    config = builder.create_builder_config()
+    config.set_memory_pool_limit(trt.MemoryPoolType.WORKSPACE, 1 << 30)  # 1GB
+
+    # Optimization Profile (입력명은 export 시 지정한 "input")
+    profile = builder.create_optimization_profile()
+    min_shape = (1, 3, height, width)
+    opt_shape = (1, 3, height, width)
+    max_shape = (1, 3, height, width)
+    profile.set_shape("input", min=min_shape, opt=opt_shape, max=max_shape)
+    config.add_optimization_profile(profile)
+
+    prec = precision.lower()
+    if prec == "fp16" and builder.platform_has_fast_fp16:
+        config.set_flag(trt.BuilderFlag.FP16)
+    elif prec == "int8" and builder.platform_has_fast_int8:
+        config.set_flag(trt.BuilderFlag.INT8)
+        if calibrator is None:
+            print("[INT8] Calibrator가 없어 FP32로 대체됩니다.")
+        else:
+            config.int8_calibrator = calibrator
+    # FP32는 기본
+
+    serialized = builder.build_serialized_network(network, config)
+    if serialized is None:
+        raise RuntimeError(f"{precision.upper()} 엔진 빌드 실패")
+
+    runtime = trt.Runtime(TRT_LOGGER)
+    engine = runtime.deserialize_cuda_engine(serialized)
+    return engine
+
+# =============================
+# ONNX Export & Optimize
+# =============================
+
+def export_and_optimize_onnx(onnx_dir, model, height=192, width=640, model_type="lite_mono", device="cpu"):
+    os.makedirs(onnx_dir, exist_ok=True)
+    onnx_path = osp.join(onnx_dir, f"{model_type}.onnx")
+    dummy = torch.randn(1, 3, height, width, device=device)
+
+    torch.onnx.export(
+        model, dummy, onnx_path,
+        input_names=["input"], output_names=["output"],
+        dynamic_axes=None,  # 고정 해상도/배치 기준
+        export_params=True,
+        do_constant_folding=True,
+        opset_version=17,
+    )
+
+    model_onnx = onnx.load(onnx_path)
+    passes = [
+        'eliminate_deadend','eliminate_identity','eliminate_nop_transpose',
+        'fuse_consecutive_transposes','fuse_bn_into_conv','fuse_pad_into_conv','fuse_add_bias_into_conv'
+    ]
+    optimized = onnxoptimizer.optimize(model_onnx, passes)
+
+    # INT64 → INT32 변환(일부 백엔드 호환용)
+    for init in optimized.graph.initializer:
+        if init.data_type == onnx.TensorProto.INT64:
+            arr = numpy_helper.to_array(init).astype('int32')
+            init.CopyFrom(numpy_helper.from_array(arr, init.name))
+
+    opt_onnx_path = osp.join(onnx_dir, f"optimized_{model_type}.onnx")
+    onnx.save(optimized, opt_onnx_path)
+    return opt_onnx_path
+
+# =============================
+# 메인 + 함수형 진입점(run_build)
+# =============================
+
+def run_build(*, enc, dec, onnx_dir, height=192, width=640, device='cuda', model_type='lite_mono', calib_dir=None, calib_batches=100, calib_batch_size=8):
+    device_t = torch.device(device if torch.cuda.is_available() and str(device).startswith('cuda') else 'cpu')
+
+    enc_sd = torch.load(enc, map_location='cpu')
+    dec_sd = torch.load(dec, map_location='cpu')
+
+    encoder, decoder = custom_load_state_dict(enc_sd, dec_sd, height=height, width=width, device=device_t)
+    model = FullModel(encoder, decoder).eval().to(device_t)
+
+    opt_onnx = export_and_optimize_onnx(onnx_dir, model, height, width, model_type, device=device_t)
+
+    calibrator = None
+    if calib_dir:
+        calibrator = make_int8_calibrator(
+            image_dir=calib_dir,
+            height=height,
+            width=width,
+            batch_size=calib_batch_size,
+            n_batches=calib_batches,
+        )
+        if calibrator is None:
+            print('[INT8] PyCUDA 미탑재로 INT8 스킵')
+
+    for prec in ["fp32", "fp16", "int8"]:
+        if prec == 'int8' and (calib_dir is None or calibrator is None):
+            continue
+        try:
+            engine = build_engine(opt_onnx, precision=prec, height=height, width=width, calibrator=calibrator)
+            out_path = osp.join(onnx_dir, f"optimized_{model_type}_{prec}.engine")
+            with open(out_path, 'wb') as f:
+                f.write(engine.serialize())
+            print(f"[{prec.upper()}] 엔진 생성 완료 → {out_path}")
+        except Exception as e:
+            print(f"[{prec.upper()}] 엔진 생성 실패: {e}")
+
+    print('\nDone.')
 
 
 def main():
-    # ONNX 모델 경로
-    onnx_model_path = "proposal3.onnx"
-    # 출력할 TensorRT 엔진 경로
-    engine_output_path = "./tensorrt_output/liteproposal_f32.engine"
-    # 입력 크기 (batch, channel, height, width)
-    feed_shape = (1, 3, 192, 640)  # 예: 192×640 해상도
+    ap = argparse.ArgumentParser()
+    ap.add_argument('--enc', required=False, help='encoder.pth 경로')
+    ap.add_argument('--dec', required=False, help='depth.pth 경로')
+    ap.add_argument('--onnx_dir', required=False, help='ONNX/엔진 출력 디렉토리')
+    ap.add_argument('--height', type=int, default=192)
+    ap.add_argument('--width', type=int, default=640)
+    ap.add_argument('--device', default='cuda')
+    ap.add_argument('--model_type', default='lite_mono')
+    ap.add_argument('--calib_dir', default=None, help='INT8 보정 이미지 폴더(없으면 INT8 스킵)')
+    ap.add_argument('--calib_batches', type=int, default=100)
+    ap.add_argument('--calib_batch_size', type=int, default=8)
+    args, unknown = ap.parse_known_args()
 
-    converter = OnnxToTensorRT(workspace_size=1<<30)
-    success = converter.convert(
-        onnx_path=onnx_model_path,
-        engine_path=engine_output_path,
-        feed_shape=feed_shape,
-        use_fp16=False
+    # 인자 없으면 inline 예시 사용
+    if not args.enc or not args.dec or not args.onnx_dir:
+        device = 'cuda'
+        model_type = 'lite_v4'
+        weight_num = 97
+        enc_model_path = r"C:\Users\wodud\OneDrive\Desktop\Lite-mono_custom\experiments\logs\{0}\models\weights_{1}\encoder.pth".format(model_type,weight_num)
+        dec_model_path = r"C:\Users\wodud\OneDrive\Desktop\Lite-mono_custom\experiments\logs\{0}\models\weights_{1}\depth.pth".format(model_type,weight_num)
+        onnx_dir = r"C:\Users\wodud\OneDrive\Desktop\Lite-mono_custom\onnx_output"
+
+        run_build(
+            enc=enc_model_path,
+            dec=dec_model_path,
+            onnx_dir=onnx_dir,
+            height=192,
+            width=640,
+            device=device,
+            model_type=model_type,
+            # calib_dir=r"C:\\path\\to\\calib_images",  # INT8 사용 시 지정
+            calib_dir=None,
+            calib_batches=100,
+            calib_batch_size=8,
+        )
+        return
+
+    # 인자가 모두 있으면 CLI 모드로 수행
+    run_build(
+        enc=args.enc,
+        dec=args.dec,
+        onnx_dir=args.onnx_dir,
+        height=args.height,
+        width=args.width,
+        device=args.device,
+        model_type=args.model_type,
+        calib_dir=args.calib_dir,
+        calib_batches=args.calib_batches,
+        calib_batch_size=args.calib_batch_size,
     )
 
-    if success:
-        print("🎉 ONNX → TensorRT 변환 완료")
-    else:
-        print("⚠️ 변환 중 오류 발생")
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()

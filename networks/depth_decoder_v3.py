@@ -75,46 +75,6 @@ class DepthDecoder(nn.Module):
         upstage0_fin = F.interpolate(upstage0_fin, scale_factor=2, mode='bilinear')
         upstage0_fin = nn.Sigmoid()(upstage0_fin) # (1, 192, 640) 
         
-        # upstage2 = self.convs[("upconv", 2, 0)](stage4_ds16_10) # (64, 12, 40)
-        # upstage2 = F.interpolate(upstage2, scale_factor=2, mode='bilinear') # (64, 24, 80)
-        # upstage2 = torch.cat([upstage2, stage3_ds8_10], dim=1) # (144, 24, 80)
-        # upstage2 = self.convs[("upconv", 2, 1)](upstage2) # (64, 24, 80)
-        # upstage2_fin = self.convs[("dispconv", 2)](upstage2) # (1, 24, 80)
-        # upstage2_fin = F.interpolate(upstage2_fin, scale_factor=2, mode='bilinear')
-        # upstage2_fin = nn.Sigmoid()(upstage2_fin) # (1, 48, 160)
-        
-        # upstage1 = self.convs[("upconv", 1, 0)](upstage2) # (40, 24, 80)
-        # upstage1 = F.interpolate(upstage1, scale_factor=2, mode='bilinear') # (40, 48, 160)
-        # upstage1 = torch.cat([upstage1, stage2_ds4], dim=1) # (112, 48, 160)
-        # upstage1 = self.convs[("upconv", 1, 1)](upstage1)
-        # upstage1_fin = self.convs[("dispconv", 1)](upstage1)
-        # upstage1_fin = F.interpolate(upstage1_fin, scale_factor=2, mode='bilinear')
-        # upstage1_fin = nn.Sigmoid()(upstage1_fin)
-        
-        # upstage0 = self.convs[("upconv", 0, 0)](upstage1)
-        # upstage0 = F.interpolate(upstage0, scale_factor=2, mode='bilinear')
-        # upstage0 = torch.cat([upstage0], dim=1)
-        # upstage0 = self.convs[("upconv", 0, 1)](upstage0)
-        # upstage0_fin = self.convs[("dispconv", 0)](upstage0)
-        # upstage0_fin = F.interpolate(upstage0_fin, scale_factor=2, mode='bilinear')
-        # upstage0_fin = nn.Sigmoid()(upstage0_fin)
-        
-        
-        # x = input_features[-1]
-        # for i in range(2, -1, -1):
-        #     x = self.convs[("upconv", i, 0)](x)
-        #     x = [upsample(x)]
-
-        #     if self.use_skips and i > 0:
-        #         x += [input_features[i - 1]]
-        #     x = torch.cat(x, 1)
-        #     x = self.convs[("upconv", i, 1)](x)
-
-        #     if i in self.scales:
-        #         f = upsample(self.convs[("dispconv", i)](x), mode='bilinear')
-        #         self.outputs[("disp", i)] = self.sigmoid(f)
-
-        # return self.outputs
     
         outputs = {
             ('disp', 2): upstage2_fin,

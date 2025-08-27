@@ -26,7 +26,7 @@ class LiteMonoOptions:
           self.parser.add_argument("--model_name",
                                    type=str,
                                    help="the name of the folder to save the model in",
-                                   default="lite_v4")
+                                   default="lite_v4_pretrained")
           self.parser.add_argument("--split",
                                    type=str,
                                    help="which training split to use",
@@ -114,7 +114,7 @@ class LiteMonoOptions:
           self.parser.add_argument("--num_epochs",
                                    type=int,
                                    help="number of epochs",
-                                   default=50) #50
+                                   default=20) #50
           self.parser.add_argument("--scheduler_step_size",
                                    type=int,
                                    help="step size of the scheduler",
@@ -141,10 +141,12 @@ class LiteMonoOptions:
                                    type=str,
                                    # default=r"C:\Users\wodud\OneDrive\Desktop\Lite-mono_custom\lite-mono-pretrain.pth",
                                    help="if set, use my pretrained encoder")
+          
+          # region *weights_init
           self.parser.add_argument("--weights_init",
                                    type=str,
                                    help="pretrained or scratch",
-                                   default="pretrained",
+                                   default="pretrained", #pretrained
                                    choices=["pretrained", "scratch"])
           self.parser.add_argument("--pose_model_input",
                                    type=str,

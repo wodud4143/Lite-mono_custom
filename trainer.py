@@ -11,6 +11,7 @@ import json
 import matplotlib.pyplot as plt
 
 from evaluate_depth import evaluate
+from test import save_network
 from utils import *
 from kitti_utils import *
 from layers import *
@@ -214,7 +215,7 @@ class Trainer:
             len(train_dataset), len(val_dataset)))
 
         self.save_opts()
-
+        save_network(self.opt.model_name, self.log_path)
 
     def set_train(self):
         """Convert all models to training mode
