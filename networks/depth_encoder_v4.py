@@ -26,13 +26,15 @@ class LiteMono(nn.Module):
         super().__init__()
 
         self.num_ch_enc = np.array([32, 64, 128])
-        self.depth = [4, 4, 4]  # depth 수정
+        self.depth = [3, 3, 4]  # depth 수정
+        # self.depth = [4, 4, 4]  # depth 수정
         self.dims = [32, 64, 128]
-        # self.asym_dims = [64, 96, 128]
-        self.asym_dims = [32, 64, 128]
+        self.asym_dims = [64, 96, 128]
+        # self.asym_dims = [32, 64, 128]
 
         if height == 192 and width == 640:
-            self.dilation = [[1, 2, 3], [1, 2, 3], [1, 4, 6]] # 다일레이션 수정
+            self.dilation = [[1, 2], [1, 2], [1, 3, 5]] # 다일레이션 수정
+            # self.dilation = [[1, 2, 3], [1, 2, 3], [1, 4, 6]]
             
 
         for g in global_block_type:
@@ -92,9 +94,9 @@ class LiteMono(nn.Module):
         stage_blocks = [
             core.AsymDilatedConv(inc=self.dims[0], outc=self.asym_dims[0], dilation=self.dilation[0][0],drop_path=dp_rates[0],residual=True),
             core.AsymDilatedConv(inc=self.dims[0], outc=self.asym_dims[0], dilation=self.dilation[0][1],drop_path=dp_rates[0 + 1],residual=True),
-            core.AsymDilatedConv(inc=self.dims[0], outc=self.asym_dims[0], dilation=self.dilation[0][2],drop_path=dp_rates[0 + 2],residual=True),
+            # core.AsymDilatedConv(inc=self.dims[0], outc=self.asym_dims[0], dilation=self.dilation[0][2],drop_path=dp_rates[0 + 2],residual=True),
             core.LGFI(dim=self.dims[0], 
-                      drop_path=dp_rates[0 + 3], 
+                      drop_path=dp_rates[0 + 2], 
                       expan_ratio=expan_ratio,
                       use_pos_emb=use_pos_embd_xca[0], 
                       num_heads=heads[0], 
@@ -103,11 +105,11 @@ class LiteMono(nn.Module):
         self.stages.append(nn.Sequential(*stage_blocks))
         
         stage_blocks = [
-            core.AsymDilatedConv(inc=self.dims[1], outc=self.asym_dims[1], dilation=self.dilation[1][0],drop_path=dp_rates[3 + 1],residual=True),
-            core.AsymDilatedConv(inc=self.dims[1], outc=self.asym_dims[1], dilation=self.dilation[1][1],drop_path=dp_rates[3 + 2],residual=True),
-            core.AsymDilatedConv(inc=self.dims[1], outc=self.asym_dims[1], dilation=self.dilation[1][2],drop_path=dp_rates[3 + 3],residual=True),
+            core.AsymDilatedConv(inc=self.dims[1], outc=self.asym_dims[1], dilation=self.dilation[1][0],drop_path=dp_rates[2 + 1],residual=True),
+            core.AsymDilatedConv(inc=self.dims[1], outc=self.asym_dims[1], dilation=self.dilation[1][1],drop_path=dp_rates[2 + 2],residual=True),
+            # core.AsymDilatedConv(inc=self.dims[1], outc=self.asym_dims[1], dilation=self.dilation[1][2],drop_path=dp_rates[3 + 3],residual=True),
             core.LGFI(dim=self.dims[1], 
-                      drop_path=dp_rates[3 + 4], 
+                      drop_path=dp_rates[2 + 3], 
                       expan_ratio=expan_ratio,
                       use_pos_emb=use_pos_embd_xca[1], 
                       num_heads=heads[1], 
@@ -116,11 +118,11 @@ class LiteMono(nn.Module):
         self.stages.append(nn.Sequential(*stage_blocks))
         
         stage_blocks = [
-            core.AsymDilatedConv(inc=self.dims[2], outc=self.asym_dims[2], dilation=self.dilation[2][0],drop_path=dp_rates[7 + 1],residual=True),
-            core.AsymDilatedConv(inc=self.dims[2], outc=self.asym_dims[2], dilation=self.dilation[2][1],drop_path=dp_rates[7 + 2],residual=True),
-            core.AsymDilatedConv(inc=self.dims[2], outc=self.asym_dims[2], dilation=self.dilation[2][2],drop_path=dp_rates[7 + 3],residual=True),
+            core.AsymDilatedConv(inc=self.dims[2], outc=self.asym_dims[2], dilation=self.dilation[2][0],drop_path=dp_rates[5 + 1],residual=True),
+            core.AsymDilatedConv(inc=self.dims[2], outc=self.asym_dims[2], dilation=self.dilation[2][1],drop_path=dp_rates[5 + 2],residual=True),
+            core.AsymDilatedConv(inc=self.dims[2], outc=self.asym_dims[2], dilation=self.dilation[2][2],drop_path=dp_rates[5 + 3],residual=True),
             core.LGFI(dim=self.dims[2], 
-                      drop_path=dp_rates[7 + 4], 
+                      drop_path=dp_rates[5 + 4], 
                       expan_ratio=expan_ratio,
                       use_pos_emb=use_pos_embd_xca[2], 
                       num_heads=heads[2], 

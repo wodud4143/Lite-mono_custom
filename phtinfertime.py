@@ -13,12 +13,12 @@ import datasets
 
 
 DATA_DIR         = r"C:\Users\wodud\OneDrive\Desktop\Lite-mono_custom\kitti_data\2011_09_26\2011_09_26_drive_0001_sync\image_02\data"
-ENCODER_PATH     = r"C:\Users\wodud\OneDrive\Desktop\Lite-mono_custom\experiments\logs\lite_v4_use_ds4\models\weights_19\encoder.pth"
-DECODER_PATH     = r"C:\Users\wodud\OneDrive\Desktop\Lite-mono_custom\experiments\logs\lite_v4_use_ds4\models\weights_19\depth.pth"
+ENCODER_PATH     = r"C:\Users\wodud\OneDrive\Desktop\Lite-mono_custom\experiments\logs\lite_v4_ds4_modified_Asymm_scratch\models\weights_19\encoder.pth"
+DECODER_PATH     = r"C:\Users\wodud\OneDrive\Desktop\Lite-mono_custom\experiments\logs\lite_v4_ds4_modified_Asymm_scratch\models\weights_19\depth.pth"
 MODEL_TYPE       = "litemono"               
 IMG_SIZE         = (640, 192)            
-NUM_OUTER_LOOPS  = 10
-WARMUP_LOOPS     = 3                    
+NUM_OUTER_LOOPS  = 20
+WARMUP_LOOPS     = 5                    
 USE_FP16         = False                
 DEVICE           = "cuda"
 
@@ -117,6 +117,27 @@ def main():
         size_wh=size_wh,
         use_fp16=USE_FP16
     )
+    
+def check_infertime(model_path):
+
+    enc_model_path = model_path + "\encoder.pth"
+    dec_model_path = model_path + "\depth.pth"     
+    image_paths = sorted(glob.glob(osp.join(DATA_DIR, "*.png")))
+    assert len(image_paths) > 0, "이미지 경로에 PNG가 없습니다."
+
+    encoder, decoder, (h, w) = load_models(enc_model_path, dec_model_path)
+
+
+    size_wh = (w, h) if (w, h) != (IMG_SIZE[1], IMG_SIZE[0]) else IMG_SIZE
+
+    measure_latency_single_images(
+        encoder=encoder,
+        decoder=decoder,
+        image_paths=image_paths,
+        size_wh=size_wh,
+        use_fp16=USE_FP16
+    )
+    
 
 if __name__ == "__main__":
     main()

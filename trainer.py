@@ -10,7 +10,9 @@ import json
 
 import matplotlib.pyplot as plt
 
+from convert_f16 import convertTensorRT
 from evaluate_depth import evaluate
+from phtinfertime import check_infertime
 from test import save_network
 from utils import *
 from kitti_utils import *
@@ -19,7 +21,7 @@ from layers import *
 import datasets
 import networks
 from linear_warmup_cosine_annealing_warm_restarts_weight_decay import ChainedScheduler
-from torchprofile import profile_macs
+
 
 
 
@@ -175,7 +177,7 @@ class Trainer:
                                      self.opt.frame_ids, 4, is_train=True, img_ext=img_ext)
         
         self.train_loader = DataLoader(train_dataset, self.opt.batch_size, True, 
-                                       num_workers=self.opt.num_workers, pin_memory=True, drop_last=True, prefetch_factor=2,persistent_workers=True )
+                                       num_workers=self.opt.num_workers, pin_memory=True, drop_last=True,prefetch_factor=2,persistent_workers=True) #prefetch_factor=2,persistent_workers=True
         # ---------------------------------------------------------------
         
         # ------------------------ Validation ------------------------
@@ -183,7 +185,7 @@ class Trainer:
                                    self.opt.frame_ids, 4, is_train=False, img_ext=img_ext)
         
         self.val_loader = DataLoader(val_dataset, self.opt.batch_size, True,
-                                     num_workers=self.opt.num_workers, pin_memory=True, drop_last=True, prefetch_factor=2,persistent_workers=True)
+                                     num_workers=self.opt.num_workers, pin_memory=True, drop_last=True,prefetch_factor=2,persistent_workers=True) #prefetch_factor=2,persistent_workers=True
         # ---------------------------------------------------------------
         self.val_iter = iter(self.val_loader)
 
@@ -242,6 +244,12 @@ class Trainer:
             self.run_epoch()
             if (self.epoch + 1) % self.opt.save_frequency == 0:
                 self.save_model()
+                
+        model_type = self.opt.model_name
+        model_path = os.path.join(self.log_path, "models", "weights_{}".format(self.epoch))  
+        # region TensorRT변환, 속도 체크     
+        convertTensorRT(model_path,model_type)
+        check_infertime(model_path)
 
     # region - * run epoch
     def run_epoch(self):

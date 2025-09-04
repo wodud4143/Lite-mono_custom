@@ -2,7 +2,7 @@ import torch
 from thop import profile, clever_format
 import networks
 
-def calculate_flops(model_name="lite-mono", height=192, width=640, device="cuda"):
+def calculate_flops(model_name="lite_v4", height=192, width=640, device="cuda"):
 
     x = torch.randn(1, 3, height, width).to(device)
 

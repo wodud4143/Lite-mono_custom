@@ -12,6 +12,8 @@ from onnx import numpy_helper
 import onnxoptimizer
 
 
+device = 'cuda'
+
 class FullModel(torch.nn.Module):
     def __init__(self, encoder, decoder):
         super().__init__()
@@ -56,7 +58,7 @@ def custom_load_state_dict(loaded_enc, loaded_dec):
     return encoder, decoder
 
 
-def convert_onnx_and_trt(onnx_dir, models, device='cpu'):
+def convert_onnx_and_trt(onnx_dir, models,model_type, device='cpu',):
     dummy_input = torch.randn(1, 3, 192, 640).to(device)  # 입력 사이즈에 맞게 조절
     
     encoder, decoder = models
@@ -136,26 +138,32 @@ def build_engine(onnx_file_path):
     return engine
 
 
+def convertTensorRT(model_path,model_type):
+    onnx_dir = "onnx_output"
+    model_type = model_type
+    enc_model_path = model_path + "\encoder.pth"
+    dec_model_path = model_path + "\depth.pth"
+    enc_state_dict = torch.load(enc_model_path, map_location=device)
+    dec_state_dict = torch.load(dec_model_path, map_location=device)
+    encoder, decoder = custom_load_state_dict(enc_state_dict, dec_state_dict)
+    convert_onnx_and_trt(onnx_dir, models=[encoder, decoder], model_type = model_type, device=device)
+
+
 
 def main():
     onnx_dir = r"C:\Users\wodud\OneDrive\Desktop\Lite-mono_custom\onnx_output"
     
     enc_state_dict = torch.load(enc_model_path, map_location=device)
     dec_state_dict = torch.load(dec_model_path, map_location=device)
-    
+    model_type = 'lite_v4_use_ds4_modifying_scratch'
     encoder, decoder = custom_load_state_dict(enc_state_dict, dec_state_dict)
-    convert_onnx_and_trt(onnx_dir, models=[encoder, decoder], device=device)
+    convert_onnx_and_trt(onnx_dir, models=[encoder, decoder], model_type = model_type, device=device)
 
 
 if __name__ == "__main__":
-    device = 'cuda'
-    model_type = 'lite_mono'
-    exp_dir = osp.join(osp.dirname(__file__), "experiments\logs")
 
-    enc_model = 'encoder.pth'
-    dec_model = 'depth.pth'
+    exp_dir = osp.join(osp.dirname(__file__), "experiments\logs")
     
-    enc_model_path = r"C:\Users\wodud\OneDrive\Desktop\Lite-mono_custom\experiments\logs\lite_mono_scratch\models\weights_49\encoder.pth"
-    dec_model_path = r"C:\Users\wodud\OneDrive\Desktop\Lite-mono_custom\experiments\logs\lite_mono_scratch\models\weights_49\depth.pth"
+    enc_model_path = r"C:\Users\wodud\OneDrive\Desktop\Lite-mono_custom\experiments\logs\lite_v4_use_ds4_modifying_scratch\models\weights_19\encoder.pth"
+    dec_model_path = r"C:\Users\wodud\OneDrive\Desktop\Lite-mono_custom\experiments\logs\lite_v4_use_ds4_modifying_scratch\models\weights_19\depth.pth"
     main()
-    # infer_pth()

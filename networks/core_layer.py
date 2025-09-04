@@ -129,49 +129,9 @@ class CDilated(nn.Module):
 
 
 # region - [AsymDC]
-class AsymDilatedConv(nn.Module):
-    def __init__(self, inc, outc, dilation):
-        super().__init__()
-        self.expansion_conv = nn.Conv2d(inc, outc, kernel_size=1)
-        
-        self.conv1x3 = nn.Conv2d(outc, outc, 
-                                 kernel_size=(1, 3),
-                                 padding=(0, 1))
-        self.conv3x1 = nn.Conv2d(outc, outc, 
-                                 kernel_size=(3, 1),
-                                 padding=(1, 0))
-        self.conv3x3 = nn.Conv2d(outc, outc, 
-                                 kernel_size=3,
-                                 padding=dilation,
-                                 dilation=dilation)
-        self.bn1 = nn.BatchNorm2d(outc)
-        self.act = nn.GELU()
-        
-        self.reduction_conv = nn.Conv2d(outc, inc, kernel_size=1)
-        self.bn2 = nn.BatchNorm2d(inc)
-    
-    def forward(self, x):
-        # 채널 확장 (64 -> 128 -> 256)
-        x = self.expansion_conv(x)
-        
-        x = self.conv1x3(x)
-        x = self.conv3x1(x)
-        
-        x = self.conv3x3(x)
-        x = self.bn1(x)
-        x = self.act(x)
-        
-        x = self.reduction_conv(x)
-        x = self.bn2(x)
-        
-        return x
-    
 # class AsymDilatedConv(nn.Module):
-#     def __init__(self, inc, outc, dilation, drop_path=0.0, residual=False):
+#     def __init__(self, inc, outc, dilation):
 #         super().__init__()
-#         self.residual = residual
-#         self.drop_path = DropPath(drop_path) if drop_path > 0 else nn.Identity()
-        
 #         self.expansion_conv = nn.Conv2d(inc, outc, kernel_size=1)
         
 #         self.conv1x3 = nn.Conv2d(outc, outc, 
@@ -192,7 +152,6 @@ class AsymDilatedConv(nn.Module):
     
 #     def forward(self, x):
 #         # 채널 확장 (64 -> 128 -> 256)
-#         identity = x
 #         x = self.expansion_conv(x)
         
 #         x = self.conv1x3(x)
@@ -205,11 +164,69 @@ class AsymDilatedConv(nn.Module):
 #         x = self.reduction_conv(x)
 #         x = self.bn2(x)
         
-#         if self.residual:
-#             x = identity + self.drop_path(x)
-#             return self.act(x)        
-#         else:
-#             return self.act(x)  
+#         return x
+    
+class AsymDilatedConv(nn.Module):
+    def __init__(self, inc, outc, dilation, drop_path=0.0, residual=False):
+        super().__init__()
+        self.residual = residual
+        self.drop_path = DropPath(drop_path) if drop_path > 0 else nn.Identity()
+        
+        self.expansion_conv = nn.Conv2d(inc, outc, kernel_size=1)
+        
+        self.conv1x5 = nn.Conv2d(outc, outc, 
+                                 kernel_size=(1, 5),
+                                 padding=(0, 2))
+        self.conv5x1 = nn.Conv2d(outc, outc, 
+                                 kernel_size=(5, 1),
+                                 padding=(2, 0))
+        self.conv3x3 = nn.Conv2d(outc , outc, 
+                                 kernel_size=3,
+                                 padding=dilation,
+                                 dilation=dilation)
+        
+        # self.dw3x3 = nn.Conv2d(outc*2, outc*2, 3, padding=dilation,
+        #                dilation=dilation, groups=outc*2, bias=False)
+        # self.pw1x1 = nn.Conv2d(outc*2, outc, 1, bias=False)
+        # self.bn_dw  = nn.BatchNorm2d(outc*2)
+        # self.bn_pw  = nn.BatchNorm2d(outc)
+        
+        self.bn1 = nn.BatchNorm2d(outc)
+        self.act = nn.GELU()
+        
+        self.reduction_conv = nn.Conv2d(outc, inc, kernel_size=1)
+        self.bn2 = nn.BatchNorm2d(inc)
+    
+    def forward(self, x):
+        # 채널 확장 (64 -> 128 -> 256)
+        identity = x
+        x = self.expansion_conv(x)
+        
+        x1 = self.conv1x5(x)
+        x2 = self.conv5x1(x)
+        
+        x = x1+x2
+        # x = torch.cat([x1,x2],dim=1)
+        
+        x = self.conv3x3(x)
+        x = self.bn1(x)
+        x = self.act(x)
+        
+        # x = self.dw3x3(x)
+        # x = self.bn_dw(x)
+        # x = self.act(x)
+        # x = self.pw1x1(x)
+        # x = self.bn_pw(x)
+        # x = self.act(x)
+                
+        x = self.reduction_conv(x)
+        x = self.bn2(x)
+        
+        if self.residual:
+            x = identity + self.drop_path(x)
+            return self.act(x)        
+        else:
+            return self.act(x)  
             
 
 # region - Dilated

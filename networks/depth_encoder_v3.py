@@ -26,8 +26,8 @@ class LiteMono(nn.Module):
         super().__init__()
 
         self.num_ch_enc = np.array([32, 64, 128])
-        # self.depth = [4, 4, 10]
-        self.depth = [3, 3, 4]
+        self.depth = [4, 4, 10]
+        # self.depth = [3, 3, 4]
         self.dims = [32, 64, 128]
         self.asym_dims = [64, 96, 128]
 

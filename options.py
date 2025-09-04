@@ -26,7 +26,7 @@ class LiteMonoOptions:
           self.parser.add_argument("--model_name",
                                    type=str,
                                    help="the name of the folder to save the model in",
-                                   default="lite_v4_pretrained")
+                                   default="lite_v4_use_ds4_modified_dims")
           self.parser.add_argument("--split",
                                    type=str,
                                    help="which training split to use",
@@ -146,7 +146,7 @@ class LiteMonoOptions:
           self.parser.add_argument("--weights_init",
                                    type=str,
                                    help="pretrained or scratch",
-                                   default="pretrained", #pretrained
+                                   default="scratch", #pretrained
                                    choices=["pretrained", "scratch"])
           self.parser.add_argument("--pose_model_input",
                                    type=str,
