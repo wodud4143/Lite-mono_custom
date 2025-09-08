@@ -106,7 +106,7 @@ def main():
 
 if __name__ == "__main__":
     
-    model_type = 'lite_v4_use_ds4'
+    model_type = 'lite_v4_4MA_use_3x3_dw'
     test_image_dir = r"C:\Users\wodud\OneDrive\Desktop\Lite-mono_custom\kitti_data\2011_09_26\2011_09_26_drive_0001_sync\image_02\data"
     test_image_paths = glob(osp.join(test_image_dir, "*.png"))
     

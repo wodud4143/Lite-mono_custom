@@ -98,6 +98,69 @@ class XCA(nn.Module):
         return {'temperature'}
     
 
+
+# region - LGFI
+class LGFI(nn.Module):
+    """
+    Local-Global Features Interaction
+    """
+    def __init__(self, dim, drop_path=0., layer_scale_init_value=1e-6, expan_ratio=6,
+                 use_pos_emb=True, num_heads=6, qkv_bias=True, attn_drop=0., drop=0.):
+        super().__init__()
+
+        self.dim = dim
+        self.pos_embd = None
+        if use_pos_emb:
+            self.pos_embd = PositionalEncodingFourier(dim=self.dim)
+
+        self.norm_xca = clayers.LayerNorm(self.dim, eps=1e-6)
+
+        self.gamma_xca = nn.Parameter(layer_scale_init_value * torch.ones(self.dim),
+                                      requires_grad=True) if layer_scale_init_value > 0 else None
+        
+        self.xca = XCA(self.dim, num_heads=num_heads, qkv_bias=qkv_bias, attn_drop=attn_drop, proj_drop=drop)
+        
+        
+        self.norm = clayers.LayerNorm(self.dim, eps=1e-6)
+        self.pwconv1 = nn.Linear(self.dim, expan_ratio * self.dim)
+        self.act = nn.GELU()
+        self.pwconv2 = nn.Linear(expan_ratio * self.dim, self.dim)
+        self.gamma = nn.Parameter(layer_scale_init_value * torch.ones((self.dim)),
+                                  requires_grad=True) if layer_scale_init_value > 0 else None
+        self.drop_path = DropPath(drop_path) if drop_path > 0. else nn.Identity()
+
+
+    def forward(self, x):
+        input_ = x
+        
+        B, C, H, W = x.shape
+        
+        x = x.reshape(B, C, H * W).permute(0, 2, 1)  
+        
+        if self.pos_embd:
+            pos_encoding = self.pos_embd(B, H, W).reshape(B, -1, x.shape[1]).permute(0, 2, 1)
+            x = x + pos_encoding
+        
+
+        x = x + self.gamma_xca * self.xca(self.norm_xca(x))
+        
+        x = x.reshape(B, H, W, C)
+
+        # Inverted Bottleneck
+        x = self.norm(x)
+        x = self.pwconv1(x)
+        x = self.act(x)
+        x = self.pwconv2(x)
+        if self.gamma is not None:
+            x = self.gamma * x
+        x = x.permute(0, 3, 1, 2)  # (N, H, W, C) -> (N, C, H, W)
+
+        x = input_ + self.drop_path(x)
+
+        return x
+    
+    
+
 # region - CDilated
 class CDilated(nn.Module):
     """
@@ -176,26 +239,28 @@ class AsymDilatedConv(nn.Module):
         
         self.conv1x5 = nn.Conv2d(outc, outc, 
                                  kernel_size=(1, 5),
-                                 padding=(0, 2))
+                                 padding=(0, 2*dilation),
+                                 dilation=(1, dilation))
         self.conv5x1 = nn.Conv2d(outc, outc, 
                                  kernel_size=(5, 1),
-                                 padding=(2, 0))
-        self.conv3x3 = nn.Conv2d(outc , outc, 
-                                 kernel_size=3,
-                                 padding=dilation,
-                                 dilation=dilation)
+                                 padding=(2*dilation, 0),
+                                 dilation=(dilation, 1))
+        # self.conv3x3 = nn.Conv2d(outc , outc, 
+        #                          kernel_size=3,
+        #                          padding=dilation,
+        #                          dilation=dilation)
         
-        # self.dw3x3 = nn.Conv2d(outc*2, outc*2, 3, padding=dilation,
-        #                dilation=dilation, groups=outc*2, bias=False)
-        # self.pw1x1 = nn.Conv2d(outc*2, outc, 1, bias=False)
-        # self.bn_dw  = nn.BatchNorm2d(outc*2)
-        # self.bn_pw  = nn.BatchNorm2d(outc)
+        self.dw3x3 = nn.Conv2d(outc*2, outc*2, 3, padding=dilation,
+                       dilation=dilation, groups=outc*2, bias=False)
+        self.pw1x1 = nn.Conv2d(outc*2, outc, 1, bias=False)
+        self.bn_dw  = nn.BatchNorm2d(outc*2)
+        self.bn_pw  = nn.BatchNorm2d(outc)
         
-        self.bn1 = nn.BatchNorm2d(outc)
+        self.bn1 = nn.BatchNorm2d(outc, eps=1e-3, momentum=0.999)
         self.act = nn.GELU()
         
         self.reduction_conv = nn.Conv2d(outc, inc, kernel_size=1)
-        self.bn2 = nn.BatchNorm2d(inc)
+        self.bn2 = nn.BatchNorm2d(inc, eps=1e-3, momentum=0.999)
     
     def forward(self, x):
         # 채널 확장 (64 -> 128 -> 256)
@@ -205,19 +270,19 @@ class AsymDilatedConv(nn.Module):
         x1 = self.conv1x5(x)
         x2 = self.conv5x1(x)
         
-        x = x1+x2
-        # x = torch.cat([x1,x2],dim=1)
+        # x = x1+x2
+        x = torch.cat([x1,x2],dim=1)
         
-        x = self.conv3x3(x)
-        x = self.bn1(x)
+        # x = self.conv3x3(x)
+        # x = self.bn1(x)
+        # x = self.act(x)
+        
+        x = self.dw3x3(x)
+        x = self.bn_dw(x)
         x = self.act(x)
-        
-        # x = self.dw3x3(x)
-        # x = self.bn_dw(x)
-        # x = self.act(x)
-        # x = self.pw1x1(x)
-        # x = self.bn_pw(x)
-        # x = self.act(x)
+        x = self.pw1x1(x)
+        x = self.bn_pw(x)
+        x = self.act(x)
                 
         x = self.reduction_conv(x)
         x = self.bn2(x)
@@ -280,68 +345,6 @@ class DilatedConv(nn.Module):
 
         return x
 
-
-
-# region - LGFI
-class LGFI(nn.Module):
-    """
-    Local-Global Features Interaction
-    """
-    def __init__(self, dim, drop_path=0., layer_scale_init_value=1e-6, expan_ratio=6,
-                 use_pos_emb=True, num_heads=6, qkv_bias=True, attn_drop=0., drop=0.):
-        super().__init__()
-
-        self.dim = dim
-        self.pos_embd = None
-        if use_pos_emb:
-            self.pos_embd = PositionalEncodingFourier(dim=self.dim)
-
-        self.norm_xca = clayers.LayerNorm(self.dim, eps=1e-6)
-
-        self.gamma_xca = nn.Parameter(layer_scale_init_value * torch.ones(self.dim),
-                                      requires_grad=True) if layer_scale_init_value > 0 else None
-        
-        self.xca = XCA(self.dim, num_heads=num_heads, qkv_bias=qkv_bias, attn_drop=attn_drop, proj_drop=drop)
-        
-        
-        self.norm = clayers.LayerNorm(self.dim, eps=1e-6)
-        self.pwconv1 = nn.Linear(self.dim, expan_ratio * self.dim)
-        self.act = nn.GELU()
-        self.pwconv2 = nn.Linear(expan_ratio * self.dim, self.dim)
-        self.gamma = nn.Parameter(layer_scale_init_value * torch.ones((self.dim)),
-                                  requires_grad=True) if layer_scale_init_value > 0 else None
-        self.drop_path = DropPath(drop_path) if drop_path > 0. else nn.Identity()
-
-
-    def forward(self, x):
-        input_ = x
-        
-        B, C, H, W = x.shape
-        
-        x = x.reshape(B, C, H * W).permute(0, 2, 1)  
-        
-        if self.pos_embd:
-            pos_encoding = self.pos_embd(B, H, W).reshape(B, -1, x.shape[1]).permute(0, 2, 1)
-            x = x + pos_encoding
-        
-
-        x = x + self.gamma_xca * self.xca(self.norm_xca(x))
-        
-        x = x.reshape(B, H, W, C)
-
-        # Inverted Bottleneck
-        x = self.norm(x)
-        x = self.pwconv1(x)
-        x = self.act(x)
-        x = self.pwconv2(x)
-        if self.gamma is not None:
-            x = self.gamma * x
-        x = x.permute(0, 3, 1, 2)  # (N, H, W, C) -> (N, C, H, W)
-
-        x = input_ + self.drop_path(x)
-
-        return x
-    
     
 # region - [Ghost]
 class CustomGhostModule(nn.Module):
@@ -370,6 +373,7 @@ class CustomGhostModule(nn.Module):
         x_3x3 = self.conv3(x_3x3)
         
         return x_3x3
+
     
 # region - [MiTBlock]
 

@@ -26,7 +26,7 @@ class LiteMonoOptions:
           self.parser.add_argument("--model_name",
                                    type=str,
                                    help="the name of the folder to save the model in",
-                                   default="lite_v4_use_ds4_modified_dims")
+                                   default="lite_v4_4MA_use_3x3_dw_with_dil")
           self.parser.add_argument("--split",
                                    type=str,
                                    help="which training split to use",

@@ -27,23 +27,23 @@ class LiteMono(nn.Module):
 
         self.num_ch_enc = np.array([32, 64, 128])
         self.depth = [3, 3, 4]  # depth 수정
-        # self.depth = [4, 4, 4]  # depth 수정
         self.dims = [32, 64, 128]
-        self.asym_dims = [64, 96, 128]
-        # self.asym_dims = [32, 64, 128]
+        self.asym_dims = [32, 64, 128]
 
         if height == 192 and width == 640:
-            self.dilation = [[1, 2], [1, 2], [1, 3, 5]] # 다일레이션 수정
-            # self.dilation = [[1, 2, 3], [1, 2, 3], [1, 4, 6]]
+            self.dilation = [[1, 2], [2, 1], [2, 3, 5]] # 다일레이션 수정
             
-
         for g in global_block_type:
             assert g in ['None', 'LGFI']
 
 
-        self.avg_pool2 = clayers.AvgPool(ratio=2) # 1/2
-        self.avg_pool4 = clayers.AvgPool(ratio=4) # 1/4
-        self.avg_pool8 = clayers.AvgPool(ratio=8) # 1/8
+        # self.avg_pool2 = clayers.AvgPool(ratio=2) # 1/2
+        # self.avg_pool4 = clayers.AvgPool(ratio=4) # 1/4
+        # self.avg_pool8 = clayers.AvgPool(ratio=8) # 1/8
+        
+        self.input_conv_s2 = clayers.StandardConv(in_chans, self.dims[0], kernel_size=3, stride=2, padding=1, bn_act=True) # 1/2
+        self.input_conv_s4 = clayers.StandardConv(in_chans, self.dims[0], kernel_size=3, stride=4, padding=1, bn_act=True) # 1/4
+        self.input_conv_s8 = clayers.StandardConv(in_chans, self.dims[1], kernel_size=3, stride=8, padding=1, bn_act=True) # 1/8
 
         
         self.init_conv = nn.Sequential(
@@ -53,11 +53,14 @@ class LiteMono(nn.Module):
                               padding=1, 
                               bn_act=True)
         )
-        self.ds_conv1 = clayers.StandardConv(self.dims[0]+3, self.dims[0],
-                                          kernel_size=3,
-                                          stride=2, 
-                                          padding=1, 
-                                          bn_act=True)
+        # self.ds_conv1 = clayers.StandardConv(self.dims[0]+3, self.dims[0],
+        #                                   kernel_size=3,
+        #                                   stride=2, 
+        #                                   padding=1, 
+        #                                   bn_act=True)
+        
+        self.ds_conv_3x3_32 = clayers.StandardConv(self.dims[0], self.dims[0], kernel_size=3, stride=2, padding=1, bn_act=True)
+        
         self.cghost_layer = core.CustomGhostModule(self.dims[0], self.dims[0]//2)
 
         self.ds_conv2 = clayers.StandardConv(self.dims[0], self.dims[1],
@@ -68,24 +71,25 @@ class LiteMono(nn.Module):
         self.cghost2_layer = core.CustomGhostModule(self.dims[1], self.dims[1]//2)
 
         
-        self.downsample_layer2 = nn.Sequential(
-            clayers.StandardConv(self.dims[0]+3, self.dims[1], 
-                                 kernel_size=3, 
-                                 stride=2,
-                                 padding=1, 
-                                 bn_act=False)
-        )
+        # self.downsample_layer2 = nn.Sequential(
+        #     clayers.StandardConv(self.dims[0]+3, self.dims[1], 
+        #                          kernel_size=3, 
+        #                          stride=2,
+        #                          padding=1, 
+        #                          bn_act=False)
+        # )
         
+        self.add_ds_conv_64 = clayers.StandardConv(self.dims[0], self.dims[1], kernel_size=3, stride=2, padding=1, bn_act=False)
         
-        self.downsample_layer3 = nn.Sequential(
-            clayers.StandardConv(self.dims[1]+3, self.dims[2], 
-                                 kernel_size=3, 
-                                 stride=2, 
-                                 padding=1, 
-                                 bn_act=False)
-        )
+        # self.downsample_layer3 = nn.Sequential(
+        #     clayers.StandardConv(self.dims[1]+3, self.dims[2], 
+        #                          kernel_size=3, 
+        #                          stride=2, 
+        #                          padding=1, 
+        #                          bn_act=False)
+        # )
         
-
+        self.add_ds_conv_128 = clayers.StandardConv(self.dims[1], self.dims[2], kernel_size=3, stride=2, padding=1, bn_act=False)
         
         
         self.stages = nn.ModuleList()
@@ -148,17 +152,26 @@ class LiteMono(nn.Module):
     def forward(self, x):
         x = (x - 0.45) / 0.225
         
-        x_down2 = self.avg_pool2(x)
-        x_down4 = self.avg_pool4(x)
-        x_down8 = self.avg_pool8(x)
+        # x_down2 = self.avg_pool2(x)
+        # x_down4 = self.avg_pool4(x)
+        # x_down8 = self.avg_pool8(x)
+        
+        x_down2 = self.input_conv_s2(x)
+        x_down4 = self.input_conv_s4(x)
+        x_down8 = self.input_conv_s8(x)
         
         """(32, 96, 320)"""
         ds2 = self.init_conv(x)
-        """(35, 96, 320)"""
-        ds2 = torch.cat((ds2, x_down2), dim=1)
+        
+        """(32, 96, 320)"""
+        ds2 = torch.add(ds2,x_down2)
+        
+        # """(35, 96, 320)"""
+        # ds2 = torch.cat((ds2, x_down2), dim=1)
 
         """(32, 48, 160)"""
-        ds4 = self.ds_conv1(ds2) # StandardConv(stride = 2)
+        # ds4 = self.ds_conv1(ds2) # StandardConv(stride = 2)
+        ds4 = self.ds_conv_3x3_32(ds2)
         ds4 = self.cghost_layer(ds4)
 
         """(32, 48, 160)"""
@@ -166,11 +179,19 @@ class LiteMono(nn.Module):
             ds4 = self.stages[0][s](ds4) #Asymmblock
         ds4 = self.stages[0][-1](ds4) #LGFI
         
-        """(35, 48, 160)"""
-        concat_ds4 = torch.cat([ds4, x_down4], dim=1)
+        # """(35, 48, 160)"""
+        # concat_ds4 = torch.cat([ds4, x_down4], dim=1)
+        
+        """(32, 48, 160)"""
+        add_ds4 = torch.add(ds4,x_down4)
+        
+    
+        # """(64, 24, 80)"""
+        # ds8 = self.downsample_layer2(concat_ds4) # StandardConv(stride = 2)
+        
         
         """(64, 24, 80)"""
-        ds8 = self.downsample_layer2(concat_ds4) # StandardConv(stride = 2)
+        ds8 = self.add_ds_conv_64(add_ds4) # StandardConv(stride = 2)
         
         
         """(64, 24, 80)"""
@@ -178,11 +199,17 @@ class LiteMono(nn.Module):
             ds8 = self.stages[1][s](ds8) #Asymmblock
         ds8 = self.stages[1][-1](ds8) #LGFI
         
-        """(67, 24, 80)"""
-        concat_ds8 = torch.cat([ds8, x_down8], dim=1)
+        # """(67, 24, 80)"""
+        # concat_ds8 = torch.cat([ds8, x_down8], dim=1)
+        
+        """(64, 24, 80)"""
+        add_ds8 = torch.add(ds8,x_down8)
+        
+        # """(128, 12, 40)"""
+        # ds16 = self.downsample_layer3(concat_ds8) # StandardConv(stride = 2)
         
         """(128, 12, 40)"""
-        ds16 = self.downsample_layer3(concat_ds8) # StandardConv(stride = 2)
+        ds16 = self.add_ds_conv_128(add_ds8) # StandardConv(stride = 2)
         
         for s in range(len(self.stages[2]) - 1):
             ds16 = self.stages[2][s](ds16) #Asymmblock

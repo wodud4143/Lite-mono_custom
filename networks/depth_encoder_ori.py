@@ -340,6 +340,7 @@ class AvgPool(nn.Module):
         return x
 
 
+# region - Main Arch
 class LiteMono(nn.Module):
     """
     Lite-Mono
@@ -353,45 +354,14 @@ class LiteMono(nn.Module):
 
         if model == 'lite-mono':
             self.num_ch_enc = np.array([48, 80, 128])
-            # Feature map - channel:48 ==> (8, 48, 64, 64)
-            # 즉, 48은 convolution kernel의 개수 
-            
-            # self.depth = [4, 4, 10]
             self.depth = [4, 4, 10]
-            # self.dims = [48, 80, 128]
             self.dims = [48, 80, 128]
+            
             if height == 192 and width == 640:
-                # self.dilation = [[1, 2, 3], [1, 2, 3], [1, 2, 3, 1, 2, 3, 2, 4, 6]]
                 self.dilation = [[1, 2, 3], [1, 2, 3], [1, 2, 3, 1, 2, 3, 2, 4, 6]]
             elif height == 320 and width == 1024:
                 self.dilation = [[1, 2, 5], [1, 2, 5], [1, 2, 5, 1, 2, 5, 2, 4, 10]]
 
-        elif model == 'lite-mono-small':
-            self.num_ch_enc = np.array([48, 80, 128])
-            self.depth = [4, 4, 7]
-            self.dims = [48, 80, 128]
-            if height == 192 and width == 640:
-                self.dilation = [[1, 2, 3], [1, 2, 3], [1, 2, 3, 2, 4, 6]]
-            elif height == 320 and width == 1024:
-                self.dilation = [[1, 2, 5], [1, 2, 5], [1, 2, 5, 2, 4, 10]]
-
-        elif model == 'lite-mono-tiny':
-            self.num_ch_enc = np.array([32, 64, 128])
-            self.depth = [4, 4, 7]
-            self.dims = [32, 64, 128]
-            if height == 192 and width == 640:
-                self.dilation = [[1, 2, 3], [1, 2, 3], [1, 2, 3, 2, 4, 6]]
-            elif height == 320 and width == 1024:
-                self.dilation = [[1, 2, 5], [1, 2, 5], [1, 2, 5, 2, 4, 10]]
-
-        elif model == 'lite-mono-8m':
-            self.num_ch_enc = np.array([64, 128, 224])
-            self.depth = [4, 4, 10]
-            self.dims = [64, 128, 224]
-            if height == 192 and width == 640:
-                self.dilation = [[1, 2, 3], [1, 2, 3], [1, 2, 3, 1, 2, 3, 2, 4, 6]]
-            elif height == 320 and width == 1024:
-                self.dilation = [[1, 2, 3], [1, 2, 3], [1, 2, 3, 1, 2, 3, 2, 4, 6]]
 
         for g in global_block_type:
             assert g in ['None', 'LGFI']
@@ -468,7 +438,6 @@ class LiteMono(nn.Module):
         for i in range(4):
             x_down.append(self.input_downsample[i](x))
         
-
         tmp_x = []
         x = self.downsample_layers[0](x)
         x = self.stem2(torch.cat((x, x_down[0]), dim=1))
@@ -480,12 +449,6 @@ class LiteMono(nn.Module):
         tmp_x.append(x)
         features.append(x)
 
-        # feature map 1 : (8, 48, 48, 160)
-        # feature map 2 : (8, 80, 24, 80)
-        # feature map 3 : (8, 128, 12, 40)
-        # feature map 4 : (8, x, 6, 20) 생성.
-        
-        # for i in range(1, 3):
         for i in range(1, 3):
             tmp_x.append(x_down[i])
             x = torch.cat(tmp_x, dim=1)

@@ -13,8 +13,8 @@ import datasets
 
 
 DATA_DIR         = r"C:\Users\wodud\OneDrive\Desktop\Lite-mono_custom\kitti_data\2011_09_26\2011_09_26_drive_0001_sync\image_02\data"
-ENCODER_PATH     = r"C:\Users\wodud\OneDrive\Desktop\Lite-mono_custom\experiments\logs\lite_v4_ds4_modified_Asymm_scratch\models\weights_19\encoder.pth"
-DECODER_PATH     = r"C:\Users\wodud\OneDrive\Desktop\Lite-mono_custom\experiments\logs\lite_v4_ds4_modified_Asymm_scratch\models\weights_19\depth.pth"
+ENCODER_PATH     = r"C:\Users\wodud\OneDrive\Desktop\Lite-mono_custom\experiments\logs\lite_v4_4MA_use_3x3_dw\models\weights_19\encoder.pth"
+DECODER_PATH     = r"C:\Users\wodud\OneDrive\Desktop\Lite-mono_custom\experiments\logs\lite_v4_4MA_use_3x3_dw\models\weights_19\depth.pth"
 MODEL_TYPE       = "litemono"               
 IMG_SIZE         = (640, 192)            
 NUM_OUTER_LOOPS  = 20
