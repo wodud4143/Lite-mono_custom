@@ -34,7 +34,7 @@ def parse_args():
 
     parser.add_argument('--load_weights_folder', type=str,
                         help='path of a pretrained model to use',
-                        default='experiments/logs/lite_v4_use_ds4/models/weights_19'
+                        default='experiments/logs/lite_v4_4MA_use_3x3/models/weights_19'
                         )
 
     parser.add_argument('--test',
@@ -218,7 +218,7 @@ def test_simple(args):
 
 def direct():
 
-    directory = r"C:\Users\wodud\OneDrive\Desktop\도로주행 데이터\lite_v4_use_ds4" 
+    directory = r"C:\Users\wodud\OneDrive\Desktop\도로주행 데이터\lite_v4_4MA_use_3x3" 
 
     folders = [os.path.join(directory, f) for f in os.listdir(directory) if os.path.isdir(os.path.join(directory, f))]
 

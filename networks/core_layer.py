@@ -239,12 +239,12 @@ class AsymDilatedConv(nn.Module):
         
         self.conv1x5 = nn.Conv2d(outc, outc, 
                                  kernel_size=(1, 5),
-                                 padding=(0, 2*dilation),
-                                 dilation=(1, dilation))
+                                 padding=(0, 2) #padding=(0, 2*dilation)
+                                 )  #dilation=(1, dilation)
         self.conv5x1 = nn.Conv2d(outc, outc, 
                                  kernel_size=(5, 1),
-                                 padding=(2*dilation, 0),
-                                 dilation=(dilation, 1))
+                                 padding=(2, 0) #padding=(2*dilation, 0),
+                                 ) #dilation=(dilation, 1)
         # self.conv3x3 = nn.Conv2d(outc , outc, 
         #                          kernel_size=3,
         #                          padding=dilation,
@@ -347,32 +347,80 @@ class DilatedConv(nn.Module):
 
     
 # region - [Ghost]
-class CustomGhostModule(nn.Module):
-    def __init__(self, inc, outc, exp=1):
-        super().__init__()
-        self.exp = exp
-        self.inc = inc
-        self.outc = outc
+# class CustomGhostModule(nn.Module):
+#     def __init__(self, inc, outc, exp=1):
+#         super().__init__()
+#         self.exp = exp
+#         self.inc = inc
+#         self.outc = outc
         
-        self.conv1 = nn.Conv2d(inc, outc, kernel_size=1, bias=False)
-        self.conv1_bn = nn.BatchNorm2d(outc, eps=1e-3, momentum=0.999)
+#         self.conv1 = nn.Conv2d(inc, outc, kernel_size=1, bias=False)
+#         self.conv1_bn = nn.BatchNorm2d(outc, eps=1e-3, momentum=0.999)
         
-        self.conv2 = nn.Conv2d(outc, outc, kernel_size=3, padding=1, bias=False)
-        self.conv2_bn = nn.BatchNorm2d(outc, eps=1e-3, momentum=0.999)
+#         self.conv2 = nn.Conv2d(outc, outc, kernel_size=3, padding=1, bias=False)
+#         self.conv2_bn = nn.BatchNorm2d(outc, eps=1e-3, momentum=0.999)
+#         
+#         self.conv3 = nn.Conv2d(outc, inc, kernel_size=1, bias=False)
+        
+        
+#     def forward(self, x):
+#         x_1x1 = self.conv1(x)
+#         x_1x1 = self.conv1_bn(x_1x1)
+        
+#         x_3x3 = self.conv2(x_1x1)
+#         x_3x3 = self.conv2_bn(x_3x3)
+        
+#         x_3x3 = self.conv3(x_3x3)
+        
+#         return x_3x3
 
-        self.conv3 = nn.Conv2d(outc, inc, kernel_size=1, bias=False)
+
+class CustomGhostModule(nn.Module):
+    def __init__(self, inc, outc = None, exp=1):
+        super().__init__()
+
+        self.midc = inc * 2
+        c_half = self.midc // 2
         
+
+        self.expand_pw = nn.Conv2d(inc, self.midc, kernel_size=1, bias=False)
+        self.expand_bn = nn.BatchNorm2d(self.midc,eps=1e-3, momentum=0.999)
+        
+        self.reduce_pw = nn.Conv2d(self.midc, inc, kernel_size=1, bias=False)
+        self.reduce_bn = nn.BatchNorm2d(inc ,eps=1e-3, momentum=0.999)
+
+        self.ex_conv = nn.Conv2d(c_half, c_half, kernel_size=3, padding=1, bias=False)
+        self.ex_bn = nn.BatchNorm2d(c_half,eps=1e-3, momentum=0.999)
+        
+        self.ch_conv = nn.Conv2d(c_half, c_half, kernel_size=3, padding=2, dilation=2, bias=False)
+        self.ch_bn = nn.BatchNorm2d(c_half,eps=1e-3, momentum=0.999)
+        
+        self.act = nn.GELU()
+   
         
     def forward(self, x):
-        x_1x1 = self.conv1(x)
-        x_1x1 = self.conv1_bn(x_1x1)
+        identity = x
+
+        x = self.expand_pw(x)
+        x = self.expand_bn(x)
+        x = self.act(x)
         
-        x_3x3 = self.conv2(x_1x1)
-        x_3x3 = self.conv2_bn(x_3x3)
+        x1, x2 = torch.chunk(x, 2, dim=1)
         
-        x_3x3 = self.conv3(x_3x3)
+        x1 = self.ex_conv(x1)
+        x1 = self.ex_bn(x1)
+        x1 = self.act(x1)
         
-        return x_3x3
+        x2 = self.ch_conv(x2)
+        x2 = self.ch_bn(x2)
+        x2 = self.act(x2)
+        
+        x = torch.cat([x1, x2], dim=1)
+        x = self.reduce_pw(x)
+        x = self.reduce_bn(x)
+        
+        x = x + identity
+        return x
 
     
 # region - [MiTBlock]

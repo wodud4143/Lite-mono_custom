@@ -156,12 +156,12 @@ class LiteMono(nn.Module):
         # x_down4 = self.avg_pool4(x)
         # x_down8 = self.avg_pool8(x)
         
-        x_down2 = self.input_conv_s2(x)
-        x_down4 = self.input_conv_s4(x)
-        x_down8 = self.input_conv_s8(x)
+        x_down2 = self.input_conv_s2(x) # 3, 32
+        x_down4 = self.input_conv_s4(x) # 3, 32
+        x_down8 = self.input_conv_s8(x) # 3, 64
         
         """(32, 96, 320)"""
-        ds2 = self.init_conv(x)
+        ds2 = self.init_conv(x) # 3 ,32
         
         """(32, 96, 320)"""
         ds2 = torch.add(ds2,x_down2)
@@ -171,8 +171,8 @@ class LiteMono(nn.Module):
 
         """(32, 48, 160)"""
         # ds4 = self.ds_conv1(ds2) # StandardConv(stride = 2)
-        ds4 = self.ds_conv_3x3_32(ds2)
-        ds4 = self.cghost_layer(ds4)
+        ds4 = self.ds_conv_3x3_32(ds2) # 32, 32
+        ds4 = self.cghost_layer(ds4) # 32, 32
 
         """(32, 48, 160)"""
         for s in range(len(self.stages[0])-1):
@@ -183,7 +183,7 @@ class LiteMono(nn.Module):
         # concat_ds4 = torch.cat([ds4, x_down4], dim=1)
         
         """(32, 48, 160)"""
-        add_ds4 = torch.add(ds4,x_down4)
+        add_ds4 = torch.add(ds4,x_down4) 
         
     
         # """(64, 24, 80)"""
@@ -191,7 +191,7 @@ class LiteMono(nn.Module):
         
         
         """(64, 24, 80)"""
-        ds8 = self.add_ds_conv_64(add_ds4) # StandardConv(stride = 2)
+        ds8 = self.add_ds_conv_64(add_ds4) # StandardConv(stride = 2) 34,64
         
         
         """(64, 24, 80)"""
