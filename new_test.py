@@ -8,11 +8,11 @@ import numpy as np
 import PIL.Image as pil
 import matplotlib as mpl
 import matplotlib.cm as cm
+import importlib.util
 
 import torch
 from torchvision import transforms, datasets
 
-import networks
 from layers import disp_to_depth, transformation_from_parameters
 import cv2
 import heapq
@@ -32,9 +32,9 @@ def parse_args():
                         default= direct()
                         )# required=True
 
-    parser.add_argument('--load_weights_folder', type=str,
-                        help='path of a pretrained model to use',
-                        default='experiments/logs/v4.1/models/weights_19'
+    parser.add_argument('--model_name', type=str,
+                        help='model name for path construction',
+                        default='v4.1'
                         )
 
     parser.add_argument('--test',
@@ -59,22 +59,55 @@ def parse_args():
     return parser.parse_args()
 
 
+def load_module_from_path(module_name, file_path):
+    """동적으로 모듈을 로드하는 함수"""
+    spec = importlib.util.spec_from_file_location(module_name, file_path)
+    if spec is None or spec.loader is None:
+        raise ImportError(f"Cannot load module from {file_path}")
+    
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 
 def test_simple(args):
     """Function to predict for a single image or folder of images
     """
-    assert args.load_weights_folder is not None, \
-        "You must specify the --load_weights_folder parameter"
+    # 모델명 설정
+    modelname = args.model_name
+    
+    # 절대 경로 설정
+    base_path = os.path.abspath("experiments/logs")
+    model_base_path = os.path.join(base_path, modelname)
+    
+    # 가중치 파일 경로
+    encoder_path = os.path.join(model_base_path, "models", "weights_19", "encoder.pth")
+    decoder_path = os.path.join(model_base_path, "models", "weights_19", "depth.pth")
+    
+    # 모델 파일 경로
+    encoder_module_path = os.path.join(model_base_path, f"{modelname}_encoder.py")
+    decoder_module_path = os.path.join(model_base_path, f"{modelname}_decoder.py")
+    
+    # 파일 존재 확인
+    assert os.path.exists(encoder_path), f"Encoder weights not found: {encoder_path}"
+    assert os.path.exists(decoder_path), f"Decoder weights not found: {decoder_path}"
+    assert os.path.exists(encoder_module_path), f"Encoder module not found: {encoder_module_path}"
+    assert os.path.exists(decoder_module_path), f"Decoder module not found: {decoder_module_path}"
 
     if torch.cuda.is_available() and not args.no_cuda:
         device = torch.device("cuda")
     else:
         device = torch.device("cpu")
 
-    print("-> Loading model from ", device, args.load_weights_folder)
-    encoder_path = os.path.join(args.load_weights_folder, "encoder.pth")
-    decoder_path = os.path.join(args.load_weights_folder, "depth.pth")
+    print("-> Loading model from", device)
+    print("-> Encoder path:", encoder_path)
+    print("-> Decoder path:", decoder_path)
+    print("-> Encoder module path:", encoder_module_path)
+    print("-> Decoder module path:", decoder_module_path)
+
+    # 동적으로 모듈 로드
+    encoder_module = load_module_from_path(f"{modelname}_encoder", encoder_module_path)
+    decoder_module = load_module_from_path(f"{modelname}_decoder", decoder_module_path)
 
     encoder_dict = torch.load(encoder_path)
     decoder_dict = torch.load(decoder_path)
@@ -83,11 +116,11 @@ def test_simple(args):
     feed_height = encoder_dict['height']
     feed_width = encoder_dict['width']
 
-    # LOADING PRETRAINED MODEL
-    print("   Loading pretrained encoder")
-    encoder = networks.LiteMono(model=args.model,
-                                    height=feed_height,
-                                    width=feed_width)
+    # LOADING PRETRAINED MODEL - 절대 경로에서 동적으로 로드
+    print("   Loading pretrained encoder from:", encoder_module_path)
+    encoder = encoder_module.LiteMono(model=args.model,
+                                      height=feed_height,
+                                      width=feed_width)
 
     model_dict = encoder.state_dict()
     encoder.load_state_dict({k: v for k, v in encoder_dict.items() if k in model_dict})
@@ -95,8 +128,8 @@ def test_simple(args):
     encoder.to(device)
     encoder.eval()
 
-    print("   Loading pretrained decoder")
-    depth_decoder = networks.DepthDecoder(encoder.num_ch_enc, scales=range(3))
+    print("   Loading pretrained decoder from:", decoder_module_path)
+    depth_decoder = decoder_module.DepthDecoder(encoder.num_ch_enc, scales=range(3))
     depth_model_dict = depth_decoder.state_dict()
     depth_decoder.load_state_dict({k: v for k, v in decoder_dict.items() if k in depth_model_dict})
 
@@ -107,7 +140,6 @@ def test_simple(args):
     # 하위 디렉토리 많을때
     '''
     for image_folder in args.image_path:
-    # image_folder = r"C:\Users\wodud\OneDrive\Desktop\도로주행 데이터\lite_v4\test2"
         if image_folder :
             # FINDING INPUT IMAGES
             if os.path.isfile(image_folder) and not args.test:
@@ -185,13 +217,7 @@ def test_simple(args):
                     output_name = os.path.splitext(os.path.basename(image_path))[0]
                     # output_name = os.path.splitext(image_path)[0].split('/')[-1]
                     scaled_disp, depth = disp_to_depth(disp, 0.1, 100)
-                    
-                    # # # 원본이미지 같이 저장
-                    # original_image = pil.open(image_path)
-                    # original_image.save(os.path.join(output_directory, "{}.png".format(output_name)))
-                    
-                    
-
+                
                     name_dest_npy = os.path.join(output_directory, "{}_disp.npy".format(output_name))
                     np.save(name_dest_npy, scaled_disp.cpu().numpy())
 

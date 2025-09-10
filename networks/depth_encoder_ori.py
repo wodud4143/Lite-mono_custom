@@ -44,49 +44,6 @@ class PositionalEncodingFourier(nn.Module):
         pos = self.token_projection(pos)
         return pos
     
-    
-# region - MQA
-class MultiQueryAttentionLayerV2(nn.Module):
-    """Multi Query Attention in PyTorch."""
-    
-    def __init__(self, num_heads, key_dim, value_dim, dropout=0.0):
-        super().__init__()
-        self.num_heads = num_heads
-        self.key_dim = key_dim
-        self.value_dim = value_dim
-        self.dropout = dropout
-        
-        self.query_proj = nn.Parameter(torch.randn(num_heads, key_dim, key_dim))
-        self.key_proj = nn.Parameter(torch.randn(key_dim, key_dim))
-        self.value_proj = nn.Parameter(torch.randn(key_dim, value_dim))
-        self.output_proj = nn.Parameter(torch.randn(key_dim, num_heads, value_dim))
-        
-        self.dropout_layer = nn.Dropout(p=dropout)
-    
-    def _reshape_input(self, t):
-        """Reshapes a tensor to three dimensions, keeping the first and last."""
-        batch_size, *spatial_dims, channels = t.shape
-        num = torch.prod(torch.tensor(spatial_dims))
-        return t.view(batch_size, num, channels)
-    
-    def forward(self, x, m):
-        """Run layer computation."""
-        reshaped_x = self._reshape_input(x)
-        reshaped_m = self._reshape_input(m)
-
-        q = torch.einsum('bnd,hkd->bnhk', reshaped_x, self.query_proj)
-        k = torch.einsum('bmd,dk->bmk', reshaped_m, self.key_proj)
-
-        logits = torch.einsum('bnhk,bmk->bnhm', q, k)
-
-        logits = logits / (self.key_dim ** 0.5)
-        attention_scores = self.dropout_layer(F.softmax(logits, dim=-1))
-
-        v = torch.einsum('bmd,dv->bmv', reshaped_m, self.value_proj)
-        o = torch.einsum('bnhm,bmv->bnhv', attention_scores, v)
-        result = torch.einsum('bnhv,dhv->bnd', o, self.output_proj)
-
-        return result.view_as(x)
 
 
 

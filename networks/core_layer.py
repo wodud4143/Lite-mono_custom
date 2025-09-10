@@ -188,9 +188,58 @@ class CDilated(nn.Module):
 
         output = self.conv(input)
         return output
+            
+
+# region - Dilated
+class DilatedConv(nn.Module):
+    """
+    A single Dilated Convolution layer in the Consecutive Dilated Convolutions (CDC) module.
+    """
+    def __init__(self, dim, k, dilation=1, stride=1, drop_path=0.,
+                 layer_scale_init_value=1e-6, expan_ratio=6):
+        """
+        :param dim: input dimension
+        :param k: kernel size
+        :param dilation: dilation rate
+        :param drop_path: drop_path rate
+        :param layer_scale_init_value:
+        :param expan_ratio: inverted bottelneck residual
+        """
+
+        super().__init__()
+
+        self.ddwconv = CDilated(dim, dim, kSize=k, stride=stride, groups=dim, d=dilation)
+        self.bn1 = nn.BatchNorm2d(dim)
+
+        self.norm = clayers.LayerNorm(dim, eps=1e-6)
+        self.pwconv1 = nn.Linear(dim, expan_ratio * dim)
+        self.act = nn.GELU()
+        self.pwconv2 = nn.Linear(expan_ratio * dim, dim)
+        self.gamma = nn.Parameter(layer_scale_init_value * torch.ones(dim),
+                                  requires_grad=True) if layer_scale_init_value > 0 else None
+        self.drop_path = DropPath(drop_path) if drop_path > 0. else nn.Identity()
+
+    def forward(self, x):
+        input = x
+
+        x1 = self.ddwconv(x1)
+        x1 = self.bn1(x1)
+        
+        x2 = x2.permute(0, 2, 3, 1)  # (N, C, H, W) -> (N, H, W, C)
+        x2 = self.pwconv1(x2)
+        x2 = self.act(x2)
+        x2 = self.pwconv2(x2)
+        
+        if self.gamma is not None:
+            x2 = self.gamma * x2
+        x2 = x2.permute(0, 3, 1, 2)  # (N, H, W, C) -> (N, C, H, W)
+
+        x = torch.cat([x1, x2], dim=1)
+        x = input + self.drop_path(x)
+
+        return x
     
-
-
+    
 # region - [AsymDC]
 # class AsymDilatedConv(nn.Module):
 #     def __init__(self, inc, outc, dilation):
@@ -272,6 +321,7 @@ class AsymDilatedConv(nn.Module):
         
         # x = x1+x2
         x = torch.cat([x1,x2],dim=1)
+        # x = x1 * x2
         
         # x = self.conv3x3(x)
         # x = self.bn1(x)
@@ -292,88 +342,9 @@ class AsymDilatedConv(nn.Module):
             return self.act(x)        
         else:
             return self.act(x)  
-            
-
-# region - Dilated
-class DilatedConv(nn.Module):
-    """
-    A single Dilated Convolution layer in the Consecutive Dilated Convolutions (CDC) module.
-    """
-    def __init__(self, dim, k, dilation=1, stride=1, drop_path=0.,
-                 layer_scale_init_value=1e-6, expan_ratio=6):
-        """
-        :param dim: input dimension
-        :param k: kernel size
-        :param dilation: dilation rate
-        :param drop_path: drop_path rate
-        :param layer_scale_init_value:
-        :param expan_ratio: inverted bottelneck residual
-        """
-
-        super().__init__()
-
-        self.ddwconv = CDilated(dim, dim, kSize=k, stride=stride, groups=dim, d=dilation)
-        self.bn1 = nn.BatchNorm2d(dim)
-
-        self.norm = clayers.LayerNorm(dim, eps=1e-6)
-        self.pwconv1 = nn.Linear(dim, expan_ratio * dim)
-        self.act = nn.GELU()
-        self.pwconv2 = nn.Linear(expan_ratio * dim, dim)
-        self.gamma = nn.Parameter(layer_scale_init_value * torch.ones(dim),
-                                  requires_grad=True) if layer_scale_init_value > 0 else None
-        self.drop_path = DropPath(drop_path) if drop_path > 0. else nn.Identity()
-
-    def forward(self, x):
-        input = x
-        
-        # x1, x2 = torch.chunk(x, 2, dim=1)
-
-        x1 = self.ddwconv(x1)
-        x1 = self.bn1(x1)
-        
-        x2 = x2.permute(0, 2, 3, 1)  # (N, C, H, W) -> (N, H, W, C)
-        x2 = self.pwconv1(x2)
-        x2 = self.act(x2)
-        x2 = self.pwconv2(x2)
-        
-        if self.gamma is not None:
-            x2 = self.gamma * x2
-        x2 = x2.permute(0, 3, 1, 2)  # (N, H, W, C) -> (N, C, H, W)
-
-        x = torch.cat([x1, x2], dim=1)
-        x = input + self.drop_path(x)
-
-        return x
 
     
 # region - [Ghost]
-# class CustomGhostModule(nn.Module):
-#     def __init__(self, inc, outc, exp=1):
-#         super().__init__()
-#         self.exp = exp
-#         self.inc = inc
-#         self.outc = outc
-        
-#         self.conv1 = nn.Conv2d(inc, outc, kernel_size=1, bias=False)
-#         self.conv1_bn = nn.BatchNorm2d(outc, eps=1e-3, momentum=0.999)
-        
-#         self.conv2 = nn.Conv2d(outc, outc, kernel_size=3, padding=1, bias=False)
-#         self.conv2_bn = nn.BatchNorm2d(outc, eps=1e-3, momentum=0.999)
-#         
-#         self.conv3 = nn.Conv2d(outc, inc, kernel_size=1, bias=False)
-        
-        
-#     def forward(self, x):
-#         x_1x1 = self.conv1(x)
-#         x_1x1 = self.conv1_bn(x_1x1)
-        
-#         x_3x3 = self.conv2(x_1x1)
-#         x_3x3 = self.conv2_bn(x_3x3)
-        
-#         x_3x3 = self.conv3(x_3x3)
-        
-#         return x_3x3
-
 
 class CustomGhostModule(nn.Module):
     def __init__(self, inc, outc = None, exp=1):
@@ -386,7 +357,7 @@ class CustomGhostModule(nn.Module):
         self.expand_pw = nn.Conv2d(inc, self.midc, kernel_size=1, bias=False)
         self.expand_bn = nn.BatchNorm2d(self.midc,eps=1e-3, momentum=0.999)
         
-        self.reduce_pw = nn.Conv2d(self.midc, inc, kernel_size=1, bias=False)
+        self.reduce_pw = nn.Conv2d(c_half, inc, kernel_size=1, bias=False)
         self.reduce_bn = nn.BatchNorm2d(inc ,eps=1e-3, momentum=0.999)
 
         self.ex_conv = nn.Conv2d(c_half, c_half, kernel_size=3, padding=1, bias=False)
@@ -394,7 +365,6 @@ class CustomGhostModule(nn.Module):
         
         self.ch_conv = nn.Conv2d(c_half, c_half, kernel_size=3, padding=2, dilation=2, bias=False)
         self.ch_bn = nn.BatchNorm2d(c_half,eps=1e-3, momentum=0.999)
-        
         self.act = nn.GELU()
    
         
@@ -407,6 +377,9 @@ class CustomGhostModule(nn.Module):
         
         x1, x2 = torch.chunk(x, 2, dim=1)
         
+        # x1 = 1x1conv(x)
+        # x2 = 1x1conv(x)
+        
         x1 = self.ex_conv(x1)
         x1 = self.ex_bn(x1)
         x1 = self.act(x1)
@@ -415,7 +388,10 @@ class CustomGhostModule(nn.Module):
         x2 = self.ch_bn(x2)
         x2 = self.act(x2)
         
-        x = torch.cat([x1, x2], dim=1)
+        # x = torch.cat([x1, x2], dim=1)
+        
+        x = self.act(x1) * x2  
+        
         x = self.reduce_pw(x)
         x = self.reduce_bn(x)
         

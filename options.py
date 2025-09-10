@@ -26,7 +26,7 @@ class LiteMonoOptions:
           self.parser.add_argument("--model_name",
                                    type=str,
                                    help="the name of the folder to save the model in",
-                                   default="v4.1")
+                                   default="v4.2.1")
           self.parser.add_argument("--split",
                                    type=str,
                                    help="which training split to use",
