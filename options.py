@@ -26,7 +26,7 @@ class LiteMonoOptions:
           self.parser.add_argument("--model_name",
                                    type=str,
                                    help="the name of the folder to save the model in",
-                                   default="v4.2.1")
+                                   default="v5")
           self.parser.add_argument("--split",
                                    type=str,
                                    help="which training split to use",
@@ -110,7 +110,7 @@ class LiteMonoOptions:
                                         "Initial learning rate, "
                                         "minimum learning rate, "
                                         "First cycle step size.",
-                                   default=[0.001, 5e-6, 35, 0.0001, 1e-5, 35]) # liteweight - [0.001, 5e-6, 35, 0.0001, 1e-5, 35], pretrain - [0.0001, 5e-6, 31, 0.0001, 1e-5, 31], Scratch From -[0.0005, 5e-6, 35, 0.0001, 1e-5, 35]
+                                   default=[0.0005, 5e-6, 35, 0.0001, 1e-5, 35]) # liteweight - [0.001, 5e-6, 35, 0.0001, 1e-5, 35], pretrain - [0.0001, 5e-6, 31, 0.0001, 1e-5, 31], Scratch From -[0.0005, 5e-6, 35, 0.0001, 1e-5, 35]
           self.parser.add_argument("--num_epochs",
                                    type=int,
                                    help="number of epochs",
@@ -166,7 +166,7 @@ class LiteMonoOptions:
           self.parser.add_argument("--num_workers",
                                    type=int,
                                    help="number of dataloader workers",
-                                   default=12)
+                                   default=9)
 
           # LOADING options
           # region weight

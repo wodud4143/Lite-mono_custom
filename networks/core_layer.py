@@ -382,15 +382,15 @@ class CustomGhostModule(nn.Module):
         
         x1 = self.ex_conv(x1)
         x1 = self.ex_bn(x1)
-        x1 = self.act(x1)
+        # x1 = self.act(x1)
         
         x2 = self.ch_conv(x2)
         x2 = self.ch_bn(x2)
-        x2 = self.act(x2)
+        # x2 = self.act(x2)
         
         # x = torch.cat([x1, x2], dim=1)
         
-        x = self.act(x1) * x2  
+        x = x1 * self.act(x2)  
         
         x = self.reduce_pw(x)
         x = self.reduce_bn(x)

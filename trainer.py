@@ -10,9 +10,9 @@ import json
 
 import matplotlib.pyplot as plt
 
-from convert_f16 import convertTensorRT
+# from convert_f16 import convertTensorRT
 from evaluate_depth import evaluate
-from phtinfertime import check_infertime
+from torchinfertime import check_infertime
 from test import save_network
 from utils import *
 from kitti_utils import *
@@ -177,7 +177,7 @@ class Trainer:
                                      self.opt.frame_ids, 4, is_train=True, img_ext=img_ext)
         
         self.train_loader = DataLoader(train_dataset, self.opt.batch_size, True, 
-                                       num_workers=self.opt.num_workers, pin_memory=True, drop_last=True,prefetch_factor=2,persistent_workers=True) #prefetch_factor=2,persistent_workers=True
+                                       num_workers=self.opt.num_workers, pin_memory=True, drop_last=True,prefetch_factor=2,persistent_workers=False) #prefetch_factor=2,persistent_workers=True
         # ---------------------------------------------------------------
         
         # ------------------------ Validation ------------------------
@@ -185,7 +185,7 @@ class Trainer:
                                    self.opt.frame_ids, 4, is_train=False, img_ext=img_ext)
         
         self.val_loader = DataLoader(val_dataset, self.opt.batch_size, True,
-                                     num_workers=self.opt.num_workers, pin_memory=True, drop_last=True,prefetch_factor=2,persistent_workers=True) #prefetch_factor=2,persistent_workers=True
+                                     num_workers=self.opt.num_workers, pin_memory=True, drop_last=True,prefetch_factor=2,persistent_workers=False) #prefetch_factor=2,persistent_workers=True
         # ---------------------------------------------------------------
         self.val_iter = iter(self.val_loader)
 
@@ -248,7 +248,7 @@ class Trainer:
         model_type = self.opt.model_name
         model_path = os.path.join(self.log_path, "models", "weights_{}".format(self.epoch))  
         # region TensorRT변환, 속도 체크     
-        convertTensorRT(model_path,model_type)
+        # convertTensorRT(model_path,model_type)
         check_infertime(model_path)
 
     # region - * run epoch
@@ -618,12 +618,6 @@ class Trainer:
                                   batch_idx, samples_per_sec, loss,
                                   sec_to_hm_str(time_sofar), sec_to_hm_str(training_time_left)))
         
-        with open(output_file, 'a') as f:
-            f.write(print_string.format(self.epoch,
-                                        self.model_optimizer.state_dict()['param_groups'][0]['lr'],
-                                        self.model_pose_optimizer.state_dict()['param_groups'][0]['lr'],
-                                        batch_idx, samples_per_sec, loss,
-                                        sec_to_hm_str(time_sofar), sec_to_hm_str(training_time_left)) + "\n")
 
     def log(self, mode, inputs, outputs, losses):
         """Write an event to the tensorboard events file

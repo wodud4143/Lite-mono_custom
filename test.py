@@ -122,7 +122,7 @@ def save_network(modelname, dir):
             dst_path = os.path.join(TARGET_DIR, targets[cls])
             if os.path.exists(src_path):
                 copy_and_modify_file(src_path, dst_path, name)
-                print(f"{cls} 정의된 {fname}.py → {dst_path} 로 복사 완료 (import 구문 수정됨)")
+                print(f"{cls} 정의된 {fname}.py → {dst_path} 로 복사 완료 ")
             else:
                 print(f"⚠ {fname}.py 없음 (건너뜀)")
     
@@ -132,9 +132,7 @@ def save_network(modelname, dir):
         dst_path = os.path.join(TARGET_DIR, additional_file)
         if os.path.exists(src_path):
             copy_and_modify_file(src_path, dst_path, name)
-            print(f"{additional_file} → {dst_path} 로 복사 완료 (import 구문 수정됨)")
+            print(f"{additional_file} → {dst_path} 로 복사 완료")
         else:
             print(f"⚠ {additional_file} 없음 (건너뜀)")
 
-# 사용 예시
-# save_network("v4_1", "experiments/logs/v4_1")
