@@ -60,7 +60,7 @@ class LiteMono(nn.Module):
         super().__init__()
 
         self.num_ch_enc = np.array([32, 64, 128])
-        self.depth = [4, 6, 4]  # depth 수정 3,5,3
+        self.depth = [6, 6, 6]  # depth 수정 3,5,3
         self.dims = [32, 64, 128]
 
 
@@ -100,8 +100,10 @@ class LiteMono(nn.Module):
             Block(dim=self.dims[0], mlp_ratio=mlp_ratio, drop_path=dp_rates[0]),
             Block(dim=self.dims[0], mlp_ratio=mlp_ratio, drop_path=dp_rates[1]),
             Block(dim=self.dims[0], mlp_ratio=mlp_ratio, drop_path=dp_rates[2]),
+            Block(dim=self.dims[0], mlp_ratio=mlp_ratio, drop_path=dp_rates[3]),
+            Block(dim=self.dims[0], mlp_ratio=mlp_ratio, drop_path=dp_rates[4]),
             core.LGFI(dim=self.dims[0], 
-                      drop_path=dp_rates[3], 
+                      drop_path=dp_rates[5], 
                       expan_ratio=expan_ratio,
                       use_pos_emb=use_pos_embd_xca[0], 
                       num_heads=heads[0], 
@@ -110,13 +112,13 @@ class LiteMono(nn.Module):
         self.stages.append(nn.Sequential(*stage_blocks))
         
         stage_blocks = [
-            Block(dim=self.dims[1], mlp_ratio=mlp_ratio, drop_path=dp_rates[4]),
-            Block(dim=self.dims[1], mlp_ratio=mlp_ratio, drop_path=dp_rates[5]),
             Block(dim=self.dims[1], mlp_ratio=mlp_ratio, drop_path=dp_rates[6]),
             Block(dim=self.dims[1], mlp_ratio=mlp_ratio, drop_path=dp_rates[7]),
             Block(dim=self.dims[1], mlp_ratio=mlp_ratio, drop_path=dp_rates[8]),
+            Block(dim=self.dims[1], mlp_ratio=mlp_ratio, drop_path=dp_rates[9]),
+            Block(dim=self.dims[1], mlp_ratio=mlp_ratio, drop_path=dp_rates[10]),
             core.LGFI(dim=self.dims[1], 
-                      drop_path=dp_rates[9], 
+                      drop_path=dp_rates[11], 
                       expan_ratio=expan_ratio,
                       use_pos_emb=use_pos_embd_xca[1], 
                       num_heads=heads[1], 
@@ -125,11 +127,13 @@ class LiteMono(nn.Module):
         self.stages.append(nn.Sequential(*stage_blocks))
         
         stage_blocks = [
-            Block(dim=self.dims[2], mlp_ratio=mlp_ratio, drop_path=dp_rates[10]),
-            Block(dim=self.dims[2], mlp_ratio=mlp_ratio, drop_path=dp_rates[11]),
             Block(dim=self.dims[2], mlp_ratio=mlp_ratio, drop_path=dp_rates[12]),
+            Block(dim=self.dims[2], mlp_ratio=mlp_ratio, drop_path=dp_rates[13]),
+            Block(dim=self.dims[2], mlp_ratio=mlp_ratio, drop_path=dp_rates[14]),
+            Block(dim=self.dims[2], mlp_ratio=mlp_ratio, drop_path=dp_rates[15]),
+            Block(dim=self.dims[2], mlp_ratio=mlp_ratio, drop_path=dp_rates[16]),
             core.LGFI(dim=self.dims[2], 
-                      drop_path=dp_rates[13], 
+                      drop_path=dp_rates[17], 
                       expan_ratio=expan_ratio,
                       use_pos_emb=use_pos_embd_xca[2], 
                       num_heads=heads[2], 

@@ -347,18 +347,20 @@ class AsymDilatedConv(nn.Module):
 # region - [Ghost]
 
 class CustomGhostModule(nn.Module):
-    def __init__(self, inc, outc = None, exp=1):
+    def __init__(self, inc, outc = None, exp=2):
         super().__init__()
 
         self.midc = inc * 2
         c_half = self.midc // 2
         
 
-        self.expand_pw = nn.Conv2d(inc, self.midc, kernel_size=1, bias=False)
+        self.expand_pw = nn.Conv2d(inc, inc * exp, kernel_size=1, bias=False)
         self.expand_bn = nn.BatchNorm2d(self.midc,eps=1e-3, momentum=0.999)
         
         self.reduce_pw = nn.Conv2d(c_half, inc, kernel_size=1, bias=False)
         self.reduce_bn = nn.BatchNorm2d(inc ,eps=1e-3, momentum=0.999)
+        
+        self.conv1x1 = nn.Conv2d(inc * exp, c_half, kernel_size=1, bias=False)
 
         self.ex_conv = nn.Conv2d(c_half, c_half, kernel_size=3, padding=1, bias=False)
         self.ex_bn = nn.BatchNorm2d(c_half,eps=1e-3, momentum=0.999)
@@ -375,22 +377,22 @@ class CustomGhostModule(nn.Module):
         x = self.expand_bn(x)
         x = self.act(x)
         
-        x1, x2 = torch.chunk(x, 2, dim=1)
+        # x1, x2 = torch.chunk(x, 2, dim=1)
         
-        # x1 = 1x1conv(x)
-        # x2 = 1x1conv(x)
+        x1 = self.conv1x1(x)
+        x2 = self.conv1x1(x)
         
         x1 = self.ex_conv(x1)
         x1 = self.ex_bn(x1)
-        # x1 = self.act(x1)
+        x1 = self.act(x1)
         
         x2 = self.ch_conv(x2)
         x2 = self.ch_bn(x2)
-        # x2 = self.act(x2)
+        x2 = self.act(x2)
         
         # x = torch.cat([x1, x2], dim=1)
         
-        x = x1 * self.act(x2)  
+        x = x1 * x2 
         
         x = self.reduce_pw(x)
         x = self.reduce_bn(x)
