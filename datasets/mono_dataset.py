@@ -61,10 +61,13 @@ class MonoDataset(data.Dataset):
         # We need to specify augmentations differently in newer versions of torchvision.
         # We first try the newer tuple version; if this fails we fall back to scalars
         try:
-            self.brightness = (0.8, 1.2)
+            # self.brightness = (0.8, 1.2)
+            self.brightness = (0.8, 1.5)
             self.contrast = (0.8, 1.2)
             self.saturation = (0.8, 1.2)
             self.hue = (-0.1, 0.1)
+            # translate_ratio
+            self.translate_ratio = 0.2
             transforms.ColorJitter.get_params(
                 self.brightness, self.contrast, self.saturation, self.hue)
         except TypeError:
@@ -81,7 +84,7 @@ class MonoDataset(data.Dataset):
 
         self.load_depth = self.check_depth()
 
-    def preprocess(self, inputs, color_aug):
+    def preprocess(self, inputs, color_aug, tr_aug=False):
         """Resize colour images to the required scales and augment if required
 
         We create the color_aug object in advance and apply the same augmentation to all
@@ -101,6 +104,32 @@ class MonoDataset(data.Dataset):
                 n, im, i = k
                 inputs[(n, im, i)] = self.to_tensor(f)
                 inputs[(n + "_aug", im, i)] = self.to_tensor(color_aug(f))
+                if tr_aug:
+                    import kornia.geometry.transform as KTF
+
+                    def translate_image(img_tensor, tx, ty):
+                        M = torch.tensor([
+                            [1., 0., tx],
+                            [0., 1., ty]
+                        ], dtype=torch.float32).unsqueeze(0)
+                        return KTF.warp_affine(img_tensor.unsqueeze(0), M,
+                                               dsize=(img_tensor.shape[1], img_tensor.shape[2]),
+                                               mode='nearest',
+                                               padding_mode='border',
+                                               align_corners=True).squeeze(0)
+
+                    jittered_tensor = inputs[(n + "_aug", im, i)]
+
+                    h, w = jittered_tensor.shape[1], jittered_tensor.shape[2]
+
+                    tx = int((random.uniform(-self.translate_ratio, self.translate_ratio)) * w)
+                    ty = int((random.uniform(-self.translate_ratio, self.translate_ratio)) * h)
+
+                    translated_tensor = translate_image(jittered_tensor, tx, ty)
+
+                    inputs[(n + "_aug", im, i)] = translated_tensor
+                
+        
 
     def __len__(self):
         return len(self.filenames)
@@ -133,6 +162,7 @@ class MonoDataset(data.Dataset):
 
         do_color_aug = self.is_train and random.random() > 0.5
         do_flip = self.is_train and random.random() > 0.5
+        do_tr_aug = self.is_train and random.random() > 0.5
 
         line = self.filenames[index].split()
         folder = line[0]
@@ -167,14 +197,17 @@ class MonoDataset(data.Dataset):
             inputs[("inv_K", scale)] = torch.from_numpy(inv_K)
 
         if do_color_aug:
-            # color_aug = transforms.ColorJitter.get_params(
-            #     self.brightness, self.contrast, self.saturation, self.hue)
             color_aug = transforms.ColorJitter(
                 self.brightness, self.contrast, self.saturation, self.hue)
         else:
             color_aug = (lambda x: x)
+            
+        if do_tr_aug:
+            tr_aug = True
+            
 
-        self.preprocess(inputs, color_aug)
+        # self.preprocess(inputs, color_aug)
+        self.preprocess(inputs, color_aug, tr_aug)
 
         for i in self.frame_idxs:
             del inputs[("color", i, -1)]

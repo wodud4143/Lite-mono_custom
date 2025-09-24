@@ -26,7 +26,7 @@ class LiteMonoOptions:
           self.parser.add_argument("--model_name",
                                    type=str,
                                    help="the name of the folder to save the model in",
-                                   default="v4_3")
+                                   default="v4_3_R_aug1")
           self.parser.add_argument("--split",
                                    type=str,
                                    help="which training split to use",
@@ -114,7 +114,7 @@ class LiteMonoOptions:
           self.parser.add_argument("--num_epochs",
                                    type=int,
                                    help="number of epochs",
-                                   default=20) #50
+                                   default=100) #50
           self.parser.add_argument("--scheduler_step_size",
                                    type=int,
                                    help="step size of the scheduler",

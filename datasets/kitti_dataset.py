@@ -42,6 +42,7 @@ class KITTIDataset(MonoDataset):
         # color = resized_color
         if do_flip:
             color = color.transpose(pil.FLIP_LEFT_RIGHT)
+            
 
         return color
 

@@ -847,6 +847,8 @@ def evaluate(opt, weight_path=None, model_name=None):
         
         encoder_file_path = f"experiments/logs/{model_name}/{model_name}_encoder.py"
         decoder_file_path = f"experiments/logs/{model_name}/{model_name}_decoder.py"
+        # encoder_file_path = "networks/depth_encoder_ori.py"
+        # decoder_file_path = "networks/depth_decoder.py"
         
         LiteMono = load_model_class(encoder_file_path, "LiteMono")
         DepthDecoder = load_model_class(decoder_file_path, "DepthDecoder")
@@ -921,7 +923,6 @@ def evaluate(opt, weight_path=None, model_name=None):
     ratios = []
     errors_per_image = []
 
-    # --- 추가된 시각화를 위한 변수 초기화 ---
     h, w = encoder_dict['height'], encoder_dict['width']
     total_error_map = np.zeros((h, w), dtype=np.float32)
     gt_depth_points = []
@@ -959,15 +960,14 @@ def evaluate(opt, weight_path=None, model_name=None):
         errors.append(image_errors)
         errors_per_image.append(image_errors)
 
-        # --- 종합 에러 맵 및 산점도 데이터 누적 ---
         scaled_pred_depth = pred_depth * (ratio if not opt.disable_median_scaling else 1.0)
         
-        # 1. 종합 에러 맵
+
         error_map = compute_error_map(gt_depth, scaled_pred_depth, mask, error_type='abs_rel')
         resized_error_map = cv2.resize(error_map, (w, h))
         total_error_map += resized_error_map
 
-        # 2. 산점도 데이터
+       
         abs_error = np.abs(gt_depth_masked - pred_depth_masked)
         if len(gt_depth_masked) > 1000: # 샘플링
              sample_indices = np.random.choice(len(gt_depth_masked), 1000, replace=False)
@@ -988,17 +988,16 @@ def evaluate(opt, weight_path=None, model_name=None):
     print(("&{: 8.3f}  " * 7).format(*mean_errors.tolist()) + "\\\\")
     print("\n  " + ("flops: {0}, params: {1}, flops_e: {2}, params_e:{3}, flops_d:{4}, params_d:{5}").format(flops, params, flops_e, params_e, flops_d, params_d))
     
-    # --- 추가된 시각화 결과물 저장 ---
+
     save_dir_base = opt.load_weights_folder
 
-    # 1. 종합 에러 맵 저장
+
     mean_error_map = total_error_map / len(pred_disps)
     agg_error_map_colored = error_map_to_colormap(mean_error_map)
     agg_save_path = os.path.join(save_dir_base, "aggregated_error_map.jpg")
     cv2.imwrite(agg_save_path, cv2.cvtColor(agg_error_map_colored, cv2.COLOR_RGB2BGR))
     print(f"\n-> Saved aggregated error map to {agg_save_path}")
 
-    # 2. 오차 vs. 깊이 산점도 저장
     plt.figure(figsize=(10, 6))
     plt.scatter(gt_depth_points, error_points, s=1, alpha=0.1)
     plt.xlabel("Ground Truth Depth (m)")
@@ -1012,14 +1011,14 @@ def evaluate(opt, weight_path=None, model_name=None):
     plt.close() # Figure 닫기
     print(f"-> Saved error vs. depth scatter plot to {scatter_save_path}")
     
-    # 3. 상위/하위 N개 및 무작위 샘플 이미지 저장
+  
     if original_images:
-        # 상위/하위 N개 저장
+   
         comp_save_dir = os.path.join(save_dir_base, "comparison_images_best_worst")
         save_comparison_images(original_images, pred_disps, gt_depths, errors_per_image, 
                                filenames, comp_save_dir, opt, num_to_save=5)
         
-        # 무작위 샘플 N개 저장
+   
         rand_save_dir = os.path.join(save_dir_base, "comparison_images_random")
         os.makedirs(rand_save_dir, exist_ok=True)
         num_random_samples = 5
@@ -1027,7 +1026,7 @@ def evaluate(opt, weight_path=None, model_name=None):
         
         print(f"\n-> Saving {num_random_samples} random samples...")
         for idx in random_indices:
-            # 여기서는 abs_rel 에러를 기준으로 제목을 만듦
+  
             error_value = errors_per_image[idx][0] 
             img_to_save = create_comparison_image(original_images[idx], pred_disps[idx], gt_depths[idx], 'abs_rel', error_value, opt)
             filename_stem = Path(filenames[idx]).stem
@@ -1043,6 +1042,6 @@ if __name__ == "__main__":
     options = LiteMonoOptions()
     opts = options.parse()
     # 모델 이름과 가중치 경로를 직접 지정
-    model_name = "v4_2_1_1" 
+    model_name = "v4_3_R_1_1" 
     weights_path = f"experiments/logs/{model_name}/models/weights_19"
     evaluate(opts, weights_path, model_name)
