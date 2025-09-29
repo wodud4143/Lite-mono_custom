@@ -11,6 +11,7 @@ import json
 import matplotlib.pyplot as plt
 
 # from convert_f16 import convertTensorRT
+from convert_f16 import convertTensorRT
 from evaluate_depth import evaluate
 from torchinfertime import check_infertime
 from test import save_network
@@ -248,7 +249,7 @@ class Trainer:
         model_type = self.opt.model_name
         model_path = os.path.join(self.log_path, "models", "weights_{}".format(self.epoch))  
         # region TensorRT변환, 속도 체크     
-        # convertTensorRT(model_path,model_type)
+        convertTensorRT(model_path,model_type)
         check_infertime(model_path)
 
     # region - * run epoch

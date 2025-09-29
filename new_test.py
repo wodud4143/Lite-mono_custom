@@ -34,7 +34,7 @@ def parse_args():
 
     parser.add_argument('--model_name', type=str,
                         help='model name for path construction',
-                        default='v4_3_R_100'
+                        default='v4_3_R_aug2'
                         )
 
     parser.add_argument('--test',
@@ -81,8 +81,8 @@ def test_simple(args):
     model_base_path = os.path.join(base_path, modelname)
     
     # 가중치 파일 경로
-    encoder_path = os.path.join(model_base_path, "models", "weights_49", "encoder.pth")
-    decoder_path = os.path.join(model_base_path, "models", "weights_49", "depth.pth")
+    encoder_path = os.path.join(model_base_path, "models", "weights_69", "encoder.pth")
+    decoder_path = os.path.join(model_base_path, "models", "weights_69", "depth.pth")
     
     # 모델 파일 경로
     encoder_module_path = os.path.join(model_base_path, f"{modelname}_encoder.py")
@@ -244,7 +244,7 @@ def test_simple(args):
 
 def direct():
 
-    directory = r"C:\Users\wodud\OneDrive\Desktop\도로주행 데이터\v4_3_R_50" 
+    directory = r"C:\Users\wodud\OneDrive\Desktop\도로주행 데이터\v4_3_R_aug2_69" 
 
     folders = [os.path.join(directory, f) for f in os.listdir(directory) if os.path.isdir(os.path.join(directory, f))]
 
@@ -258,3 +258,4 @@ def direct():
 if __name__ == '__main__':
     args = parse_args()
     test_simple(args)
+
