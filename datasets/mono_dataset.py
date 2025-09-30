@@ -351,23 +351,19 @@ class MonoDataset(data.Dataset):
         self.to_tensor = transforms.ToTensor()
 
         if self.is_train:
-            
-            # Best combination: blue_hour + blue_tint + blur + saturation
             core_augs = [
-                transforms.RandomApply([RandomBlueHour(intensity_range=(0.4, 0.6))], p=0.5),
-                transforms.RandomApply([RandomBlueTint(intensity_range=(0.4, 0.6))], p=0.5),
+                transforms.RandomApply([RandomBlueHour(intensity_range=(0.2, 0.4))], p=0.5),
+                transforms.RandomApply([RandomBlueTint(intensity_range=(0.2, 0.4))], p=0.5),
                 transforms.RandomApply([RandomBlur(factor_range=(0.4, 0.5))], p=0.5),
-                transforms.RandomApply([RandomSaturation(factor_range=(1.3, 1.6))], p=0.5),
+                transforms.RandomApply([RandomSaturation(factor_range=(1.1, 1.3))], p=0.5),
             ]
             random.shuffle(core_augs)
             self.core_augmenter = transforms.Compose(core_augs)
             
-            # 🏋️‍♀️ 2. 모델의 약점을 보완하기 위한 '약점 훈련 파이프라인'
             self.weakness_augmenter = transforms.RandomChoice([
-                # RandomPerspectiveTransform(magnitude_range=(0.0, 0.08)),
-                RandomNoise(noise_level_range=(5, 15)),
-                RandomWarmTone(intensity_range=(0.8, 1.0)),
-                RandomHighlightRecovery(intensity_range=(0.3, 0.5)),
+                RandomNoise(noise_level_range=(2,8)),
+                RandomWarmTone(intensity_range=(0.3, 0.5)),
+                RandomHighlightRecovery(intensity_range=(0.2, 0.4)),
             ])
             
         self.resize = {}
