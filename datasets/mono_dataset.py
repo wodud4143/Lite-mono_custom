@@ -248,17 +248,12 @@ def pil_loader(path):
         with Image.open(f) as img:
             return img.convert('RGB')
 
-# ==========================================================================================
-# 🚀 Augmentation을 Torchvision Transform 스타일 클래스로 구현
-# ==========================================================================================
-
-# --- 🥇 최고의 조합(Best Combination)을 위한 클래스 ---
 class RandomBlueHour(object):
     def __init__(self, intensity_range):
         self.intensity_range = intensity_range
     def __call__(self, img):
         intensity = random.uniform(self.intensity_range[0], self.intensity_range[1])
-        # blue_hour 효과를 구성하는 하위 Augmentation 호출
+
         r, g, b = img.split(); r = r.point(lambda i: i * (1 - 0.15 * 0.6 * intensity)); b = b.point(lambda i: i * (1 + 0.15 * 0.6 * intensity)); img = Image.merge("RGB", (r, g, b))
         r, g, b = img.split(); b = b.point(lambda i: i * (1 + 0.15 * 0.2 * intensity)); img = Image.merge("RGB", (r, g, b))
         enhancer = ImageEnhance.Contrast(img); return enhancer.enhance(1.0 + (0.15 * intensity))
@@ -284,7 +279,6 @@ class RandomSaturation(object):
         factor = random.uniform(self.factor_range[0], self.factor_range[1])
         enhancer = ImageEnhance.Color(img); return enhancer.enhance(factor)
 
-# --- 🏋️‍♀️ 약점 보완(Weakness Training)을 위한 클래스 ---
 class RandomPerspectiveTransform(object):
     def __init__(self, magnitude_range):
         self.magnitude_range = magnitude_range
@@ -320,9 +314,6 @@ class RandomHighlightRecovery(object):
         table = np.array([((i / 255.0) ** (1/gamma)) * 255 for i in np.arange(0, 256)]).astype("uint8")
         return Image.fromarray(cv2.LUT(np.array(img), table))
 
-# ==========================================================================================
-# MonoDataset 클래스
-# ==========================================================================================
 
 class MonoDataset(data.Dataset):
     def __init__(self,
