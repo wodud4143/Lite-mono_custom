@@ -72,59 +72,70 @@ def batch_post_process_disparity(l_disp, r_disp):
     return r_mask * l_disp + l_mask * r_disp + (1.0 - l_mask - r_mask) * m_disp
 
 
-def evaluate(opt,weight_path=None):
+def evaluate(opt,models = None):
     """Evaluates a pretrained model using a specified test set
     """
     MIN_DEPTH = 1e-3
     MAX_DEPTH = 80
-
-    #add
-    if weight_path is not None:
-        opt.load_weights_folder = weight_path
         
 
 
     if opt.ext_disp_to_eval is None:
 
-        opt.load_weights_folder = os.path.expanduser(opt.load_weights_folder)
+        # opt.load_weights_folder = os.path.expanduser(opt.load_weights_folder)
 
-        assert os.path.isdir(opt.load_weights_folder), \
-            "Cannot find a folder at {}".format(opt.load_weights_folder)
+        # assert os.path.isdir(opt.load_weights_folder), \
+        #     "Cannot find a folder at {}".format(opt.load_weights_folder)
 
-        print("-> Loading weights from {}".format(opt.load_weights_folder))
+        # print("-> Loading weights from {}".format(opt.load_weights_folder))
+        
+        print("-> Evaluating models from memory...")
+        encoder = models['encoder']
+        depth_decoder = models['depth']
+        
+        height = opt.height
+        width = opt.width
+
 
         filenames = readlines(os.path.join(splits_dir, opt.eval_split, "test_files.txt"))
-        encoder_path = os.path.join(opt.load_weights_folder, "encoder.pth")
-        decoder_path = os.path.join(opt.load_weights_folder, "depth.pth")
+        # encoder_path = os.path.join(opt.load_weights_folder, "encoder.pth")
+        # decoder_path = os.path.join(opt.load_weights_folder, "depth.pth")
 
-        encoder_dict = torch.load(encoder_path)
-        decoder_dict = torch.load(decoder_path)
+        # encoder_dict = torch.load(encoder_path)
+        # decoder_dict = torch.load(decoder_path)
+        
 
+        # dataset = datasets.KITTIRAWDataset(opt.data_path, filenames,
+        #                                 encoder_dict['height'], encoder_dict['width'],
+        #                                 [0], 4, is_train=False)
         dataset = datasets.KITTIRAWDataset(opt.data_path, filenames,
-                                        encoder_dict['height'], encoder_dict['width'],
+                                        height, width,
                                         [0], 4, is_train=False)
         dataloader = DataLoader(dataset, 16, shuffle=False, num_workers=opt.num_workers,
                                 pin_memory=True, drop_last=False)
 
-        encoder = networks.LiteMono(model=opt.model,
-                                    height=encoder_dict['height'],
-                                    width=encoder_dict['width'])
-        depth_decoder = networks.DepthDecoder(encoder.num_ch_enc, scales=range(3))
-        model_dict = encoder.state_dict()
-        depth_model_dict = depth_decoder.state_dict()
-        encoder.load_state_dict({k: v for k, v in encoder_dict.items() if k in model_dict})
-        depth_decoder.load_state_dict({k: v for k, v in decoder_dict.items() if k in depth_model_dict})
+        # encoder = networks.LiteMono(model=opt.model,
+        #                             height=encoder_dict['height'],
+        #                             width=encoder_dict['width'])
+        # depth_decoder = networks.DepthDecoder(encoder.num_ch_enc, scales=range(3))
+        # model_dict = encoder.state_dict()
+        # depth_model_dict = depth_decoder.state_dict()
+        # encoder.load_state_dict({k: v for k, v in encoder_dict.items() if k in model_dict})
+        # depth_decoder.load_state_dict({k: v for k, v in decoder_dict.items() if k in depth_model_dict})
 
-        encoder.cuda()
+        # encoder.cuda()
+        # encoder.eval()
+        # depth_decoder.cuda()
+        # depth_decoder.eval()
         encoder.eval()
-        depth_decoder.cuda()
         depth_decoder.eval()
+
 
         pred_disps = []
 
         
         print("-> Computing predictions with size {}x{}".format(
-            encoder_dict['width'], encoder_dict['height']))
+            width, height))
 
         with torch.no_grad():
             for data in dataloader:
@@ -219,11 +230,6 @@ def evaluate(opt,weight_path=None):
         print(" Scaling ratios | med: {:0.3f} | std: {:0.3f}".format(med, np.std(ratios / med)))
 
     mean_errors = np.array(errors).mean(0)
-
-    if weight_path is not None:
-        path = Path(opt.load_weights_folder)
-        filename = path.name
-        print(filename + "\n")
     
     print("\n  " + ("{:>8} | " * 7).format("abs_rel", "sq_rel", "rmse", "rmse_log", "a1", "a2", "a3"))
     print(("&{: 8.3f}  " * 7).format(*mean_errors.tolist()) + "\\\\")

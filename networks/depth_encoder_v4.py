@@ -135,6 +135,13 @@ class LiteMono(nn.Module):
         ]
         self.stages.append(nn.Sequential(*stage_blocks))        
 
+        # LayerScale
+        self.gamma_24 = nn.Parameter(layer_scale_init_value * torch.ones((self.dims[0])),
+                                  requires_grad=True) if layer_scale_init_value > 0 else None
+        self.gamma_8 = nn.Parameter(layer_scale_init_value * torch.ones((self.dims[1])),
+                                  requires_grad=True) if layer_scale_init_value > 0 else None
+        
+        
         self.apply(self._init_weights)
 
     def _init_weights(self, m):
@@ -165,7 +172,11 @@ class LiteMono(nn.Module):
         ds2 = self.init_conv(x) # 3 ,32
         
         """(32, 96, 320)"""
-        ds2 = torch.add(ds2,x_down2)
+        if self.gamma_24 is not None:
+            x_down2 = x_down2.permute(0, 2, 3, 1)
+            x_down2 = self.gamma_24 * x_down2
+            x_down2 = x_down2.permute(0, 3, 1, 2)
+            ds2 = torch.add(ds2, x_down2)
         
         # """(35, 96, 320)"""
         # ds2 = torch.cat((ds2, x_down2), dim=1)
@@ -184,7 +195,11 @@ class LiteMono(nn.Module):
         # concat_ds4 = torch.cat([ds4, x_down4], dim=1)
         
         """(32, 48, 160)"""
-        add_ds4 = torch.add(ds4,x_down4) 
+        if self.gamma_24 is not None:
+            x_down4 = x_down4.permute(0, 2, 3, 1)
+            x_down4 = self.gamma_24 * x_down4
+            x_down4 = x_down4.permute(0, 3, 1, 2)
+            add_ds4 = torch.add(ds4, x_down4) 
         
     
         # """(64, 24, 80)"""
@@ -204,7 +219,11 @@ class LiteMono(nn.Module):
         # concat_ds8 = torch.cat([ds8, x_down8], dim=1)
         
         """(64, 24, 80)"""
-        add_ds8 = torch.add(ds8,x_down8)
+        if self.gamma_8 is not None:
+            x_down8 = x_down8.permute(0, 2, 3, 1)
+            x_down8 = self.gamma_8 * x_down8
+            x_down8 = x_down8.permute(0, 3, 1, 2)
+            add_ds8 = torch.add(ds8, x_down8)
         
         # """(128, 12, 40)"""
         # ds16 = self.downsample_layer3(concat_ds8) # StandardConv(stride = 2)

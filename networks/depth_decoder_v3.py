@@ -19,7 +19,6 @@ class DepthDecoder(nn.Module):
         # decoder
         self.convs = OrderedDict()
         for i in range(2, -1, -1):
-        # for i in range(3, -1, -1):
 
             num_ch_in = self.num_ch_enc[-1] if i == 2 else self.num_ch_dec[i + 1]
             num_ch_out = self.num_ch_dec[i]
@@ -48,8 +47,6 @@ class DepthDecoder(nn.Module):
 
 
     def forward(self, input_features):
-        # self.outputs = {}
-        # stage2_ds4, stage3_ds8_10, stage4_ds16_10 = input_features
         ds4, ds8_core2, ds16_core = input_features
         
         upstage2 = self.convs[("upconv", 2, 0)](ds16_core) # (64, 12, 40)

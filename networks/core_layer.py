@@ -317,7 +317,7 @@ class AsymDilatedConv(nn.Module):
         x2 = self.conv5x1(x)
         
         x = torch.cat([x1,x2],dim=1)
- 
+
         x = self.dw3x3(x)
         x = self.bn_dw(x)
         x = self.act(x)

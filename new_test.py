@@ -34,7 +34,7 @@ def parse_args():
 
     parser.add_argument('--model_name', type=str,
                         help='model name for path construction',
-                        default='v4_3_R_aug2'
+                        default='v4_3_R_aug3_gamma'
                         )
 
     parser.add_argument('--test',
@@ -70,19 +70,19 @@ def load_module_from_path(module_name, file_path):
     return module
 
 
-def test_simple(args):
+def test_simple(args,epoch,modelname):
     """Function to predict for a single image or folder of images
     """
     # 모델명 설정
-    modelname = args.model_name
+    modelname = modelname
     
     # 절대 경로 설정
     base_path = os.path.abspath("experiments/logs")
     model_base_path = os.path.join(base_path, modelname)
     
     # 가중치 파일 경로
-    encoder_path = os.path.join(model_base_path, "models", "weights_69", "encoder.pth")
-    decoder_path = os.path.join(model_base_path, "models", "weights_69", "depth.pth")
+    encoder_path = os.path.join(model_base_path, "models", f"weights_{epoch}", "encoder.pth")
+    decoder_path = os.path.join(model_base_path, "models", f"weights_{epoch}", "depth.pth")
     
     # 모델 파일 경로
     encoder_module_path = os.path.join(model_base_path, f"{modelname}_encoder.py")
@@ -244,7 +244,7 @@ def test_simple(args):
 
 def direct():
 
-    directory = r"C:\Users\wodud\OneDrive\Desktop\도로주행 데이터\v4_3_R_aug2_69" 
+    directory = r"C:\Users\wodud\OneDrive\Desktop\도로주행 데이터\v4_3_R_aug4_best" 
 
     folders = [os.path.join(directory, f) for f in os.listdir(directory) if os.path.isdir(os.path.join(directory, f))]
 
@@ -256,6 +256,8 @@ def direct():
 
 
 if __name__ == '__main__':
+    modelname = "v4_3_R_aug4"
+    epoch = 38
     args = parse_args()
-    test_simple(args)
+    test_simple(args,epoch=epoch, modelname=modelname)
 

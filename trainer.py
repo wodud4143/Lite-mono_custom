@@ -40,6 +40,9 @@ class Trainer:
     def __init__(self, options):
         self.opt = options
         self.log_path = os.path.join(self.opt.log_dir, self.opt.model_name)
+        self.best_abs_rel = float('inf')
+        self.best_sq_rel = float('inf')
+        self.best_rmse_log = float('inf')
 
         # checking height and width are multiples of 32
         assert self.opt.height % 32 == 0, "'height' must be a multiple of 32"
@@ -579,100 +582,6 @@ class Trainer:
         return losses
     
     
-    # def compute_losses(self, inputs, outputs):
-    #     """Compute the reprojection and smoothness losses for a minibatch
-    #     """
-    #     losses = {}
-    #     total_loss = 0
-    #     for scale in self.opt.scales:
-    #         loss = 0
-    #         reprojection_losses = []
-    #         if self.opt.v1_multiscale:
-    #             source_scale = scale
-    #         else:
-    #             source_scale = 0
-    #         disp = outputs[("disp", scale)]
-    #         color = inputs[("color", 0, scale)]
-    #         target = inputs[("color", 0, source_scale)]
-            
-    #         for frame_id in self.opt.frame_ids[1:]:
-    #             pred = outputs[("color", frame_id, scale)]
-    #             reprojection_losses.append(self.compute_reprojection_loss(pred, target))
-    #         reprojection_losses = torch.cat(reprojection_losses, 1)
-            
-    #         if not self.opt.disable_automasking:
-    #             identity_reprojection_losses = []
-    #             for frame_id in self.opt.frame_ids[1:]:
-    #                 pred = inputs[("color", frame_id, source_scale)]
-    #                 identity_reprojection_losses.append(
-    #                     self.compute_reprojection_loss(pred, target))
-    #             identity_reprojection_losses = torch.cat(identity_reprojection_losses, 1)
-    #             if self.opt.avg_reprojection:
-    #                 identity_reprojection_loss = identity_reprojection_losses.mean(1, keepdim=True)
-    #             else:
-    #                 identity_reprojection_loss = identity_reprojection_losses
-    #         elif self.opt.predictive_mask:
-    #             mask = outputs["predictive_mask"]["disp", scale]
-    #             if not self.opt.v1_multiscale:
-    #                 mask = F.interpolate(
-    #                     mask, [self.opt.height, self.opt.width],
-    #                     mode="bilinear", align_corners=False)
-    #             reprojection_losses *= mask
-    #             weighting_loss = 0.2 * nn.BCELoss()(mask, torch.ones(mask.shape).cuda())
-    #             loss += weighting_loss.mean()
-                
-    #         if self.opt.avg_reprojection:
-    #             reprojection_loss = reprojection_losses.mean(1, keepdim=True)
-    #         else:
-    #             reprojection_loss = reprojection_losses
-                
-    #         if not self.opt.disable_automasking:
-    #             identity_reprojection_loss += torch.randn(
-    #                 identity_reprojection_loss.shape, device=self.device) * 0.00001
-    #             combined = torch.cat((identity_reprojection_loss, reprojection_loss), dim=1)
-    #         else:
-    #             combined = reprojection_loss
-                
-    #         if combined.shape[1] == 1:
-    #             to_optimise = combined
-    #         else:
-    #             to_optimise, idxs = torch.min(combined, dim=1)
-                
-    #         if not self.opt.disable_automasking:
-    #             outputs["identity_selection/{}".format(scale)] = \
-    #                 (idxs > identity_reprojection_loss.shape[1] - 1).float()
-
-    #        # 근거리 가중치
-    #         with torch.no_grad():
-              
-    #             disp_norm = disp.detach()
-    #             disp_mean = disp_norm.mean()
-
-    #             weight_mask = torch.sigmoid((disp_norm - disp_mean) * 1.0) * 0.5 + 0.75 
-    #             if weight_mask.shape[-2:] != to_optimise.shape[-2:]:
-    #                 weight_mask = F.interpolate(
-    #                     weight_mask, 
-    #                     size=to_optimise.shape[-2:],  
-    #                     mode='bilinear', 
-    #                     align_corners=False
-    #                 )
-                
-            
-    #         weighted_loss = (to_optimise * weight_mask).mean()
-    #         loss += weighted_loss
-            
-         
-    #         mean_disp = disp.mean(2, True).mean(3, True)
-    #         norm_disp = disp / (mean_disp + 1e-7)
-    #         smooth_loss = get_smooth_loss(norm_disp, color)
-    #         loss += self.opt.disparity_smoothness * smooth_loss / (2 ** scale)
-            
-    #         total_loss += loss
-    #         losses["loss/{}".format(scale)] = loss
-            
-    #     total_loss /= self.num_scales
-    #     losses["loss"] = total_loss
-    #     return losses
 
     def compute_depth_losses(self, inputs, outputs, losses):
         """Compute depth metrics, to allow monitoring during training
@@ -771,38 +680,62 @@ class Trainer:
     def save_model(self):
         """Save model weights to disk
         """
-        save_folder = os.path.join(self.log_path, "models", "weights_{}".format(self.epoch))
-        if not os.path.exists(save_folder):
-            os.makedirs(save_folder)
-
-        for model_name, model in self.models.items():
-            save_path = os.path.join(save_folder, "{}.pth".format(model_name))
-            to_save = model.state_dict()
-            if model_name == 'encoder':
-                # save the sizes - these are needed at prediction time
-                to_save['height'] = self.opt.height
-                to_save['width'] = self.opt.width
-                to_save['use_stereo'] = self.opt.use_stereo
-            torch.save(to_save, save_path)
-
-        for model_name, model in self.models_pose.items():
-            save_path = os.path.join(save_folder, "{}.pth".format(model_name))
-            to_save = model.state_dict()
-            torch.save(to_save, save_path)
-
-        save_path = os.path.join(save_folder, "{}.pth".format("adam"))
-        torch.save(self.model_optimizer.state_dict(), save_path)
-
-        save_path = os.path.join(save_folder, "{}.pth".format("adam_pose"))
-        if self.use_pose_net:
-            torch.save(self.model_pose_optimizer.state_dict(), save_path)
-            
+        
         # region model evaluation
-        Weight_path = os.path.join(self.log_path, "models", "weights_{}".format(self.epoch))
-        mean_errors = evaluate(self.opt, weight_path=Weight_path)
+        mean_errors = evaluate(self.opt, self.models)
         for i, m in enumerate(["abs_rel", "sq_rel", "rmse", "rmse_log", "a1", "a2", "a3"]):
             self.writers["val"].add_scalar("eval/{}".format(m), mean_errors[i], self.epoch)
+            
+        current_abs_rel = mean_errors[0]
+        current_sq_rel = mean_errors[1]
+        current_rmse_log = mean_errors[3]
 
+        print(f"Epoch {self.epoch} | abs_rel: {current_abs_rel:.4f} (best: {self.best_abs_rel:.4f}) | " 
+              f"sq_rel: {current_sq_rel:.4f} (best: {self.best_sq_rel:.4f}) | "
+              f"rmse_log: {current_rmse_log:.4f} (best: {self.best_rmse_log:.4f})")
+        
+        is_best = (current_abs_rel < self.best_abs_rel and
+               current_sq_rel < self.best_sq_rel and
+               current_rmse_log < self.best_rmse_log)
+    
+        force_save = self.epoch == 19 or self.epoch == 49
+        
+        
+        if is_best or force_save :
+
+            if is_best:
+                print("성능향상")
+                self.best_abs_rel = current_abs_rel
+                self.best_sq_rel = current_sq_rel
+                self.best_rmse_log = current_rmse_log
+                
+            save_folder = os.path.join(self.log_path, "models", "weights_{}".format(self.epoch))
+            if not os.path.exists(save_folder):
+                os.makedirs(save_folder)
+
+            for model_name, model in self.models.items():
+                save_path = os.path.join(save_folder, "{}.pth".format(model_name))
+                to_save = model.state_dict()
+                if model_name == 'encoder':
+                    # save the sizes - these are needed at prediction time
+                    to_save['height'] = self.opt.height
+                    to_save['width'] = self.opt.width
+                    to_save['use_stereo'] = self.opt.use_stereo
+                torch.save(to_save, save_path)
+
+            for model_name, model in self.models_pose.items():
+                save_path = os.path.join(save_folder, "{}.pth".format(model_name))
+                to_save = model.state_dict()
+                torch.save(to_save, save_path)
+
+            save_path = os.path.join(save_folder, "{}.pth".format("adam"))
+            torch.save(self.model_optimizer.state_dict(), save_path)
+
+            save_path = os.path.join(save_folder, "{}.pth".format("adam_pose"))
+            if self.use_pose_net:
+                torch.save(self.model_pose_optimizer.state_dict(), save_path)
+            
+       
     def load_pretrain(self):
         self.opt.mypretrain = os.path.expanduser(self.opt.mypretrain)
         path = self.opt.mypretrain
