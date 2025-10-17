@@ -8,9 +8,6 @@ from tensorboardX import SummaryWriter
 
 import json
 
-import matplotlib.pyplot as plt
-
-# from convert_f16 import convertTensorRT
 from convert_f16 import convertTensorRT
 from evaluate_depth import evaluate
 from torchinfertime import check_infertime
@@ -19,12 +16,17 @@ from utils import *
 from kitti_utils import *
 from layers import *
 
+
 import datasets
 import networks
 from linear_warmup_cosine_annealing_warm_restarts_weight_decay import ChainedScheduler
 
-
-
+import matplotlib
+matplotlib.use('Agg')  # GUI 없이 figure 생성
+import matplotlib.pyplot as plt
+import io
+from PIL import Image
+import cv2
 
 output_file = "output_log.txt"
 
@@ -38,12 +40,14 @@ def time_sync():
 
 class Trainer:
     def __init__(self, options):
+        torch.cuda.empty_cache()
         self.opt = options
         self.log_path = os.path.join(self.opt.log_dir, self.opt.model_name)
         self.best_abs_rel = float('inf')
         self.best_sq_rel = float('inf')
         self.best_rmse_log = float('inf')
-
+        
+        
         # checking height and width are multiples of 32
         assert self.opt.height % 32 == 0, "'height' must be a multiple of 32"
         assert self.opt.width % 32 == 0, "'width' must be a multiple of 32"
@@ -222,6 +226,7 @@ class Trainer:
 
         self.save_opts()
         save_network(self.opt.model_name, self.log_path)
+        
 
     def set_train(self):
         """Convert all models to training mode
@@ -322,8 +327,48 @@ class Trainer:
         
         else:
             # Otherwise, we only feed the image with frame_id 0 through the depth encoder
+            
+            # 여기서 inputs["color_aug", 0, 0] 이것을 한번 더 bactch aug수행.
+            # 복잡한 움직임에 대한 구현은 zoom-in/out, 좌우회전은 구좌표계 augmentation
+            # -----------------------------------------
+            # lz, hz = 0.8, 1.2
+            # zoom_range = hz - lz
+            # random_augparams = torch.empty(12, 5).uniform_(-1., 1.)
+            # zooms = (random_augparams[:, 0] * zoom_range + lz).unsqueeze(1)
+            # zooms = zooms.to('cuda')
+            # consts = torch.cat([torch.zeros(12, 3, device='cuda'),
+            #                     torch.ones(12, 1, device='cuda')], dim=1)
+            # matrix_zs = torch.cat([
+            #     zooms, torch.zeros(12, 1, device='cuda'), torch.zeros(12, 1, device='cuda'),
+            #     torch.zeros(12, 1, device='cuda'), zooms, consts
+            #     ], dim=1)
+            # matrix_zs = matrix_zs.view(-1, 3, 3)
+            
+            # o_x = 640 / 2.0 + 0.5
+            # o_y = 192 / 2.0 + 0.5
+
+            # offset = torch.tensor([[1, 0, o_x],
+            #                     [0, 1, o_y],
+            #                     [0, 0, 1]], dtype=torch.float32, device='cuda')
+            # reset  = torch.tensor([[1, 0, -o_x],
+            #                     [0, 1, -o_y],
+            #                     [0, 0,  1]], dtype=torch.float32, device='cuda')
+
+            # matrix_zs = offset @ matrix_zs @ reset
+        
+            # aug_zs = torch.inverse(matrix_zs)
+            # theta = aug_zs[:, :2, :]
+            # grid = F.affine_grid(theta, size=inputs["color_aug", 0, 0].shape, align_corners=False)
+            # aug_img = F.grid_sample(inputs["color_aug", 0, 0], 
+            #                         grid, mode='bilinear', 
+            #                         padding_mode='border',
+            #                         align_corners=False)
+            
+            # # -----------------------------------------
+            
             features = self.models["encoder"](inputs["color_aug", 0, 0])
             outputs = self.models["depth"](features)
+       
 
         if self.opt.predictive_mask:
             outputs["predictive_mask"] = self.models["predictive_mask"](features)
@@ -626,8 +671,9 @@ class Trainer:
                                   self.model_pose_optimizer.state_dict()['param_groups'][0]['lr'],
                                   batch_idx, samples_per_sec, loss,
                                   sec_to_hm_str(time_sofar), sec_to_hm_str(training_time_left)))
-        
 
+      
+    # region log
     def log(self, mode, inputs, outputs, losses):
         """Write an event to the tensorboard events file
         """
@@ -637,7 +683,7 @@ class Trainer:
         
         #region Learning Rate
         writer.add_scalar("LR/main", self.model_optimizer.param_groups[0]['lr'], self.step)
-        
+
 
         for j in range(min(4, self.opt.batch_size)):  # write a maxmimum of four images
             for s in self.opt.scales:
@@ -665,7 +711,9 @@ class Trainer:
                     writer.add_image(
                         "automask_{}/{}".format(s, j),
                         outputs["identity_selection/{}".format(s)][j][None, ...], self.step)
+        
 
+    
     def save_opts(self):
         """Save options to disk so we know what we ran this experiment with
         """
@@ -734,6 +782,7 @@ class Trainer:
             save_path = os.path.join(save_folder, "{}.pth".format("adam_pose"))
             if self.use_pose_net:
                 torch.save(self.model_pose_optimizer.state_dict(), save_path)
+            
             
        
     def load_pretrain(self):
