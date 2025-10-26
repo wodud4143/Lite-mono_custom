@@ -1,6 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
 
+import random
 import time
 import torch.optim as optim
 from torch.utils.data import DataLoader
@@ -366,6 +367,14 @@ class Trainer:
             
             # # -----------------------------------------
             
+            # if random.random() > 0.5 :
+            #     near_img = inputs["color_aug", 1, 0]
+            # else :
+            #     near_img = inputs["color_aug", -1, 0]
+            
+            # input_imgs = torch.cat([near_img, inputs["color_aug", 0, 0]], dim=0)
+            
+            # features = self.models["encoder"](input_imgs)
             features = self.models["encoder"](inputs["color_aug", 0, 0])
             outputs = self.models["depth"](features)
        

@@ -4,7 +4,7 @@ import os
 import random
 import numpy as np
 import copy
-from PIL import Image,ImageDraw   # using pillow-simd for increased speed
+from PIL import Image  # using pillow-simd for increased speed
 
 import torch
 import torch.utils.data as data
@@ -38,7 +38,6 @@ class MonoDataset(data.Dataset):
                  frame_idxs,
                  num_scales,
                  is_train=False,
-                #  img_ext='.jpg'
                  img_ext='.png'):
         super(MonoDataset, self).__init__()
 
@@ -47,7 +46,6 @@ class MonoDataset(data.Dataset):
         self.height = height
         self.width = width
         self.num_scales = num_scales
-        # self.interp = Image.ANTIALIAS
         self.interp = Image.LANCZOS
 
         self.frame_idxs = frame_idxs
@@ -61,8 +59,7 @@ class MonoDataset(data.Dataset):
         # We need to specify augmentations differently in newer versions of torchvision.
         # We first try the newer tuple version; if this fails we fall back to scalars
         try:
-            # self.brightness = (0.8, 1.2)
-            self.brightness = (0.8, 1.5)
+            self.brightness = (0.8, 1.2)
             self.contrast = (0.8, 1.2)
             self.saturation = (0.8, 1.2)
             self.hue = (-0.1, 0.1)
@@ -81,24 +78,6 @@ class MonoDataset(data.Dataset):
                                                interpolation=self.interp)
 
         self.load_depth = self.check_depth()
-        
-    def apply_cutout(self, img, n_holes=1, length=100):
-        img = img.copy()
-        draw = ImageDraw.Draw(img)
-        h, w = img.size[1], img.size[0]
-        
-        for _ in range(n_holes):
-            y = random.randint(0, h)
-            x = random.randint(0, w)
-            
-            y1 = max(0, y - length // 2)
-            y2 = min(h, y + length // 2)
-            x1 = max(0, x - length // 2)
-            x2 = min(w, x + length // 2)
-
-            draw.rectangle([x1, y1, x2, y2], fill=(0, 0, 0))
-        
-        return img
 
     def preprocess(self, inputs, color_aug):
         """Resize colour images to the required scales and augment if required
@@ -120,7 +99,6 @@ class MonoDataset(data.Dataset):
                 n, im, i = k
                 inputs[(n, im, i)] = self.to_tensor(f)
                 inputs[(n + "_aug", im, i)] = self.to_tensor(color_aug(f))
-        
 
     def __len__(self):
         return len(self.filenames)
@@ -153,11 +131,6 @@ class MonoDataset(data.Dataset):
 
         do_color_aug = self.is_train and random.random() > 0.5
         do_flip = self.is_train and random.random() > 0.5
-        do_tr_aug = self.is_train and random.random() > 0.5
-        do_crop = self.is_train and random.random() > 0.5
-        # do_rotate = self.is_train and random.random() > 0.5
-        # do_cutout = self.is_train and random.random() > 0.5
-
 
         line = self.filenames[index].split()
         folder = line[0]
@@ -172,49 +145,12 @@ class MonoDataset(data.Dataset):
         else:
             side = None
 
-        if do_crop:
-            #85-95% 크롭
-            original_w, original_h = 1242, 375  
-            # crop_ratio = random.uniform(0.85, 0.95)
-            crop_ratio = random.uniform(0.85, 0.95)
-            crop_w = int(original_w * crop_ratio)
-            crop_h = int(original_h * crop_ratio)
-            crop_x = random.randint(0, original_w - crop_w)
-            crop_y = random.randint(0, original_h - crop_h)
-            crop_params = (crop_x, crop_y, crop_w, crop_h)
-        else:
-            crop_params = None
-            
-            
-        if do_cutout:
-            # Cutout parameters: 1-3 holes, size 50-150 pixels
-            cutout_params = {
-                'n_holes': random.randint(1, 2),
-                'length': random.randint(25, 50)
-            }
-        else:
-            cutout_params = None
-            
-        # if do_rotate:
-        #     rot_angle =  random.choice([-1, 1]) * random.uniform(20, 25)
-        # else:
-        #     rot_angle = 0
-
-        if do_tr_aug:
-            tr_params = (random.uniform(-0.1, 0.1), random.uniform(-0.1, 0.1))  # 10%로 줄임
-        else:
-            tr_params = (0, 0)
-
         for i in self.frame_idxs:
             if i == "s":
                 other_side = {"r": "l", "l": "r"}[side]
-                # inputs[("color", i, -1)] = self.get_color(folder, frame_index, other_side, do_flip, do_tr_aug, tr_params, do_crop, crop_params, do_rotate, rot_angle)
-                inputs[("color", i, -1)] = self.get_color(folder, frame_index, other_side, do_flip, do_tr_aug, tr_params, do_crop, crop_params)
-                # inputs[("color", i, -1)] = self.get_color(folder, frame_index, other_side, do_flip, do_tr_aug, tr_params, do_crop, crop_params, do_cutout, cutout_params)
+                inputs[("color", i, -1)] = self.get_color(folder, frame_index, other_side, do_flip)
             else:
-                # inputs[("color", i, -1)] = self.get_color(folder, frame_index + i, side, do_flip, do_tr_aug, tr_params, do_crop, crop_params, do_rotate, rot_angle)
-                inputs[("color", i, -1)] = self.get_color(folder, frame_index + i, side, do_flip, do_tr_aug, tr_params, do_crop, crop_params)
-                # inputs[("color", i, -1)] = self.get_color(folder, frame_index + i, side, do_flip,do_tr_aug, tr_params, do_crop, crop_params, do_cutout, cutout_params)
+                inputs[("color", i, -1)] = self.get_color(folder, frame_index + i, side, do_flip)
 
         # adjusting intrinsics to match each scale in the pyramid
         for scale in range(self.num_scales):
@@ -229,11 +165,12 @@ class MonoDataset(data.Dataset):
             inputs[("inv_K", scale)] = torch.from_numpy(inv_K)
 
         if do_color_aug:
+            # color_aug = transforms.ColorJitter.get_params(
+            #     self.brightness, self.contrast, self.saturation, self.hue)
             color_aug = transforms.ColorJitter(
                 self.brightness, self.contrast, self.saturation, self.hue)
         else:
             color_aug = (lambda x: x)
-            
 
         self.preprocess(inputs, color_aug)
 
@@ -256,14 +193,8 @@ class MonoDataset(data.Dataset):
 
         return inputs
 
-    # def get_color(self, folder, frame_index, side, do_flip, do_tr_aug, tr_params,do_crop,crop_params,do_rotate, rot_angle):
-    #     raise NotImplementedError
-    
-    def get_color(self, folder, frame_index, side, do_flip, do_tr_aug, tr_params,do_crop,crop_params):
+    def get_color(self, folder, frame_index, side, do_flip):
         raise NotImplementedError
-    
-    # def get_color(self, folder, frame_index, side, do_flip, do_tr_aug, tr_params, do_crop,crop_params, do_cutout, cutout_params):
-    #     raise NotImplementedError
 
     def check_depth(self):
         raise NotImplementedError
