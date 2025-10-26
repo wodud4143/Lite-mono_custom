@@ -12,41 +12,6 @@ import torch.cuda
 from networks import core_layer as core
 from networks import custom_layers as clayers
 
-# class GatedFusion(nn.Module):
-#     def __init__(self, in_channels, layer_scale_init_value=1e-6):
-#         super().__init__()
-
-#         self.gate_conv = nn.Sequential(
-#             nn.Conv2d(in_channels * 2, in_channels, kernel_size=3, padding=1, bias=False),
-#             nn.BatchNorm2d(in_channels,eps=1e-5, momentum=0.1),
-#             nn.ReLU6(inplace=True),
-#             nn.Conv2d(in_channels, in_channels, kernel_size=1),
-#             nn.Sigmoid()
-#         )
-        
-#          # Gamma scaling parameter
-#         self.gamma = nn.Parameter(
-#             layer_scale_init_value * torch.ones((in_channels)), 
-#             requires_grad=True
-#         ) if layer_scale_init_value > 0 else None
-    
-    
-#     #학습 종료 후 fused_low_level에 gamma scailing 적용
-#     def forward(self, high_level_feat, low_level_feat):
-#         gate_map = self.gate_conv(torch.cat([high_level_feat, low_level_feat], dim=1))
-#         fused_low_level = low_level_feat * gate_map
-        
-#         # Apply gamma scaling to fused features
-#         if self.gamma is not None:
-#             # (B, C, H, W) -> (B, H, W, C)
-#             fused_low_level = fused_low_level.permute(0, 2, 3, 1)
-#             # Apply channel-wise scaling
-#             fused_low_level = self.gamma * fused_low_level
-#             # (B, H, W, C) -> (B, C, H, W)
-#             fused_low_level = fused_low_level.permute(0, 3, 1, 2)
-            
-#         return high_level_feat + fused_low_level
-
 
 # region - Main Arch
 class LiteMono(nn.Module):
@@ -156,11 +121,7 @@ class LiteMono(nn.Module):
                                   requires_grad=True) if layer_scale_init_value > 0 else None
         
         # StarModule
-        # self.star = core.Star(dim=self.dims[0])
-        
-        #GatedFusion
-        # self.gated_fusion_24 = GatedFusion(self.dims[0],layer_scale_init_value=layer_scale_init_value)
-        # self.gated_fusion_8 = GatedFusion(self.dims[1],layer_scale_init_value=layer_scale_init_value)
+        # self.star = core.Star(dim=self.dims[0], mlp_ratio=3)
         
         self.apply(self._init_weights)
 
@@ -180,15 +141,9 @@ class LiteMono(nn.Module):
     def forward(self, x):
         x = (x - 0.45) / 0.225
         
-        # x_down2 = self.avg_pool2(x)
-        # x_down4 = self.avg_pool4(x)
-        # x_down8 = self.avg_pool8(x)
         
         x_down2 = self.input_conv_s2(x) # 3, 32
         # x_down2 = self.star(x_down2) # 3, 32
-        
-        
-        
         x_down4 = self.input_conv_s4(x) # 3, 32
         x_down8 = self.input_conv_s8(x) # 3, 64
         
@@ -201,17 +156,9 @@ class LiteMono(nn.Module):
             x_down2 = self.gamma_24 * x_down2
             x_down2 = x_down2.permute(0, 3, 1, 2)
             ds2 = torch.add(ds2, x_down2)
-        
-        
-        """StarModule"""
-        # x_down2 = self.star(x_down2)
-        # ds2 = torch.add(ds2, x_down2)
-        # ds2 = self.gated_fusion_24(ds2, x_down2)
-        
 
-
+        
         """(32, 48, 160)"""
-
         ds4 = self.ds_conv_3x3_32(ds2) # 32, 32
         ds4 = self.cghost_layer(ds4) # 32, 32
 
@@ -226,9 +173,7 @@ class LiteMono(nn.Module):
             x_down4 = x_down4.permute(0, 2, 3, 1)
             x_down4 = self.gamma_24 * x_down4
             x_down4 = x_down4.permute(0, 3, 1, 2)
-            add_ds4 = torch.add(ds4, x_down4) 
-        
-        # add_ds4 = self.gated_fusion_24(ds4, x_down4)
+            add_ds4 = torch.add(ds4, x_down4)  
         
         
         """(64, 24, 80)"""
@@ -247,9 +192,6 @@ class LiteMono(nn.Module):
             x_down8 = self.gamma_8 * x_down8
             x_down8 = x_down8.permute(0, 3, 1, 2)
             add_ds8 = torch.add(ds8, x_down8)
-        
-        
-        # add_ds8 = self.gated_fusion_8(ds8, x_down8)
         
         
         """(128, 12, 40)"""

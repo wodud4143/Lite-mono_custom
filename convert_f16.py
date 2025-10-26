@@ -155,7 +155,7 @@ def main():
     
     enc_state_dict = torch.load(enc_model_path, map_location=device)
     dec_state_dict = torch.load(dec_model_path, map_location=device)
-    model_type = 'v4_3_R'
+    model_type = 'v4_3_R_aug3_gamma'
     encoder, decoder = custom_load_state_dict(enc_state_dict, dec_state_dict)
     convert_onnx_and_trt(onnx_dir, models=[encoder, decoder], model_type = model_type, device=device)
 
@@ -164,6 +164,6 @@ if __name__ == "__main__":
 
     exp_dir = osp.join(osp.dirname(__file__), "experiments\logs")
     
-    enc_model_path = r"C:\Users\wodud\OneDrive\Desktop\Lite-mono_custom\experiments\logs\v4_3_R\models\weights_19\encoder.pth"
-    dec_model_path = r"C:\Users\wodud\OneDrive\Desktop\Lite-mono_custom\experiments\logs\v4_3_R\models\weights_19\depth.pth"
+    enc_model_path = r"C:\Users\wodud\OneDrive\Desktop\Lite-mono_custom\experiments\logs\v4_3_R_aug3_gamma\models\weights_19\encoder.pth"
+    dec_model_path = r"C:\Users\wodud\OneDrive\Desktop\Lite-mono_custom\experiments\logs\v4_3_R_aug3_gamma\models\weights_19\depth.pth"
     main()

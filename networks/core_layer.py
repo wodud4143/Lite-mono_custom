@@ -284,115 +284,115 @@ class DilatedConv(nn.Module):
         
 #         return x
     
-# class AsymDilatedConv(nn.Module):
-#     def __init__(self, inc, outc, dilation, drop_path=0.0, residual=False):
-#         super().__init__()
-#         self.residual = residual
-#         self.drop_path = DropPath(drop_path) if drop_path > 0 else nn.Identity()
-        
-#         self.expansion_conv = nn.Conv2d(inc, outc, kernel_size=1)
-        
-#         self.conv1x5 = nn.Conv2d(outc, outc, 
-#                                  kernel_size=(1, 5),
-#                                  padding=(0, 2)
-#                                  )
-#         self.conv5x1 = nn.Conv2d(outc, outc, 
-#                                  kernel_size=(5, 1),
-#                                  padding=(2, 0) 
-#                                  ) 
-        
-#         self.dw3x3 = nn.Conv2d(outc*2, outc*2, 3, padding=dilation,
-#                        dilation=dilation, groups=outc*2, bias=False)
-#         self.pw1x1 = nn.Conv2d(outc*2, outc, 1, bias=False)
-#         self.bn_dw  = nn.BatchNorm2d(outc*2)
-#         self.bn_pw  = nn.BatchNorm2d(outc)
-        
-#         self.bn1 = nn.BatchNorm2d(outc, eps=1e-3, momentum=0.999)
-#         self.act = nn.ReLU6()
-        
-#         self.reduction_conv = nn.Conv2d(outc, inc, kernel_size=1)
-#         self.bn2 = nn.BatchNorm2d(inc, eps=1e-3, momentum=0.999)
-    
-#     def forward(self, x):
-#         # 채널 확장 (64 -> 128 -> 256)
-#         identity = x
-#         x = self.expansion_conv(x)
-        
-#         x1 = self.conv1x5(x)
-#         x2 = self.conv5x1(x)
-        
-#         x = torch.cat([x1,x2],dim=1)
-
-#         x = self.dw3x3(x)
-#         x = self.bn_dw(x)
-#         x = self.act(x)
-#         x = self.pw1x1(x)
-#         x = self.bn_pw(x)
-#         x = self.act(x)
-        
-#         x = self.act(x1) * x2
-#         x = self.conv2(self.g(x))
-#         x = input + self.drop_path(x)
-                
-#         x = self.reduction_conv(x)
-#         x = self.bn2(x)
-        
-#         if self.residual:
-#             x = identity + self.drop_path(x)
-#             return self.act(x)        
-#         else:
-#             return self.act(x)  
-
-
 class AsymDilatedConv(nn.Module):
     def __init__(self, inc, outc, dilation, drop_path=0.0, residual=False):
         super().__init__()
         self.residual = residual
         self.drop_path = DropPath(drop_path) if drop_path > 0 else nn.Identity()
         
+        self.expansion_conv = nn.Conv2d(inc, outc, kernel_size=1)
         
-        self.conv1x5 = nn.Conv2d(inc, inc*2, kernel_size=(1, 5), padding=(0, 2*dilation), dilation=(1, dilation))
-        self.conv5x1 = nn.Conv2d(inc, inc*2, kernel_size=(5, 1), padding=(2*dilation, 0), dilation=(dilation, 1))
-
-        
-        self.bn1x5 = nn.BatchNorm2d(inc*2, eps=1e-3, momentum=0.999)
-        self.bn5x1 = nn.BatchNorm2d(inc*2, eps=1e-3, momentum=0.999)
-        
-        self.reduction_conv = nn.Conv2d(inc*2, inc, kernel_size=1)
-        self.reduction_conv_bn = nn.BatchNorm2d(inc, eps=1e-3, momentum=0.999)
-        
-        self.conv_3x3 = nn.Conv2d(inc, inc, 
-                                 kernel_size=3,
-                                 stride= 1,
-                                 padding=1
+        self.conv1x5 = nn.Conv2d(outc, outc, 
+                                 kernel_size=(1, 5),
+                                 padding=(0, 2)
+                                 )
+        self.conv5x1 = nn.Conv2d(outc, outc, 
+                                 kernel_size=(5, 1),
+                                 padding=(2, 0) 
                                  ) 
-        self.conv_3x3_bn = nn.BatchNorm2d(inc, eps=1e-3, momentum=0.999)
         
-        self.act = nn.ReLU6(inplace=True)
+        self.dw3x3 = nn.Conv2d(outc*2, outc*2, 3, padding=dilation,
+                       dilation=dilation, groups=outc*2, bias=False)
+        self.pw1x1 = nn.Conv2d(outc*2, outc, 1, bias=False)
+        self.bn_dw  = nn.BatchNorm2d(outc*2)
+        self.bn_pw  = nn.BatchNorm2d(outc)
         
+        self.bn1 = nn.BatchNorm2d(outc, eps=1e-3, momentum=0.999)
+        self.act = nn.ReLU6()
         
+        self.reduction_conv = nn.Conv2d(outc, inc, kernel_size=1)
+        self.bn2 = nn.BatchNorm2d(inc, eps=1e-3, momentum=0.999)
     
     def forward(self, x):
         # 채널 확장 (64 -> 128 -> 256)
         identity = x
+        x = self.expansion_conv(x)
         
         x1 = self.conv1x5(x)
-        x1 = self.bn1x5(x1)
-        
         x2 = self.conv5x1(x)
-        x2 = self.bn5x1(x2)
         
-        x = torch.add(x1,x2)
+        x = torch.cat([x1,x2],dim=1)
 
-        x = self.act(x) * x
+        x = self.dw3x3(x)
+        x = self.bn_dw(x)
+        x = self.act(x)
+        x = self.pw1x1(x)
+        x = self.bn_pw(x)
+        x = self.act(x)
         
-        x = self.reduction_conv_bn(self.reduction_conv(x))
+        x = self.act(x1) * x2
+        x = self.conv2(self.g(x))
+        x = input + self.drop_path(x)
+                
+        x = self.reduction_conv(x)
+        x = self.bn2(x)
+        
+        if self.residual:
+            x = identity + self.drop_path(x)
+            return self.act(x)        
+        else:
+            return self.act(x)  
+
+
+# class AsymDilatedConv(nn.Module):
+#     def __init__(self, inc, outc, dilation, drop_path=0.0, residual=False):
+#         super().__init__()
+#         self.residual = residual
+#         self.drop_path = DropPath(drop_path) if drop_path > 0 else nn.Identity()
+        
+        
+#         self.conv1x5 = nn.Conv2d(inc, inc*2, kernel_size=(1, 5), padding=(0, 2*dilation), dilation=(1, dilation))
+#         self.conv5x1 = nn.Conv2d(inc, inc*2, kernel_size=(5, 1), padding=(2*dilation, 0), dilation=(dilation, 1))
+
+        
+#         self.bn1x5 = nn.BatchNorm2d(inc*2, eps=1e-3, momentum=0.999)
+#         self.bn5x1 = nn.BatchNorm2d(inc*2, eps=1e-3, momentum=0.999)
+        
+#         self.reduction_conv = nn.Conv2d(inc*2, inc, kernel_size=1)
+#         self.reduction_conv_bn = nn.BatchNorm2d(inc, eps=1e-3, momentum=0.999)
+        
+#         self.conv_3x3 = nn.Conv2d(inc, inc, 
+#                                  kernel_size=3,
+#                                  stride= 1,
+#                                  padding=1
+#                                  ) 
+#         self.conv_3x3_bn = nn.BatchNorm2d(inc, eps=1e-3, momentum=0.999)
+        
+#         self.act = nn.ReLU6(inplace=True)
+        
+        
     
-        x = self.conv_3x3_bn(self.conv_3x3(x))
-       
-        x = identity + self.drop_path(x)
+#     def forward(self, x):
+#         # 채널 확장 (64 -> 128 -> 256)
+#         identity = x
         
-        return x      
+#         x1 = self.conv1x5(x)
+#         x1 = self.bn1x5(x1)
+        
+#         x2 = self.conv5x1(x)
+#         x2 = self.bn5x1(x2)
+        
+#         x = torch.add(x1,x2)
+
+#         x = self.act(x) * x
+        
+#         x = self.reduction_conv_bn(self.reduction_conv(x))
+    
+#         x = self.conv_3x3_bn(self.conv_3x3(x))
+       
+#         x = identity + self.drop_path(x)
+        
+#         return x      
 
     
 # region - [Ghost]
@@ -495,10 +495,11 @@ class Star(nn.Module):
         self.drop_path = DropPath(drop_path) if drop_path > 0. else nn.Identity()
     
     def forward(self, x):
-        input = x
-        x = self.conv1(x)
-        x1, x2 = self.f1(x), self.f2(x)
+        # input = x
+        x_init = self.conv1(x)
+        x1, x2 = self.f1(x_init), self.f2(x_init)
         x = self.act(x1) * x2
         x = self.conv2(self.g(x))
-        x = input + self.drop_path(x)
+        x = x_init + x
+        # x = input + self.drop_path(x)
         return x

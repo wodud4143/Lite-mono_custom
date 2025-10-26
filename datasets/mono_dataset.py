@@ -153,9 +153,8 @@ class MonoDataset(data.Dataset):
 
         do_color_aug = self.is_train and random.random() > 0.5
         do_flip = self.is_train and random.random() > 0.5
-        do_tr_aug = self.is_train and random.random() > 0.5
+        # do_tr_aug = self.is_train and random.random() > 0.5
         do_crop = self.is_train and random.random() > 0.5
-        # do_rotate = self.is_train and random.random() > 0.5
         # do_cutout = self.is_train and random.random() > 0.5
 
 
@@ -175,7 +174,6 @@ class MonoDataset(data.Dataset):
         if do_crop:
             #85-95% 크롭
             original_w, original_h = 1242, 375  
-            # crop_ratio = random.uniform(0.85, 0.95)
             crop_ratio = random.uniform(0.85, 0.95)
             crop_w = int(original_w * crop_ratio)
             crop_h = int(original_h * crop_ratio)
@@ -186,35 +184,33 @@ class MonoDataset(data.Dataset):
             crop_params = None
             
             
-        if do_cutout:
-            # Cutout parameters: 1-3 holes, size 50-150 pixels
-            cutout_params = {
-                'n_holes': random.randint(1, 2),
-                'length': random.randint(25, 50)
-            }
-        else:
-            cutout_params = None
+        # if do_cutout:
+        #     # Cutout parameters: 1-3 holes, size 50-150 pixels
+        #     cutout_params = {
+        #         'n_holes': random.randint(1, 3),
+        #         'length': random.randint(25, 50)
+        #     }
+        # else:
+        #     cutout_params = None
             
         # if do_rotate:
         #     rot_angle =  random.choice([-1, 1]) * random.uniform(20, 25)
         # else:
         #     rot_angle = 0
 
-        if do_tr_aug:
-            tr_params = (random.uniform(-0.1, 0.1), random.uniform(-0.1, 0.1))  # 10%로 줄임
-        else:
-            tr_params = (0, 0)
+        # if do_tr_aug:
+        #     tr_params = (random.uniform(-0.1, 0.1), random.uniform(-0.1, 0.1))  # 10%로 줄임
+        # else:
+        #     tr_params = (0, 0)
 
         for i in self.frame_idxs:
             if i == "s":
                 other_side = {"r": "l", "l": "r"}[side]
-                # inputs[("color", i, -1)] = self.get_color(folder, frame_index, other_side, do_flip, do_tr_aug, tr_params, do_crop, crop_params, do_rotate, rot_angle)
-                inputs[("color", i, -1)] = self.get_color(folder, frame_index, other_side, do_flip, do_tr_aug, tr_params, do_crop, crop_params)
-                # inputs[("color", i, -1)] = self.get_color(folder, frame_index, other_side, do_flip, do_tr_aug, tr_params, do_crop, crop_params, do_cutout, cutout_params)
+                # inputs[("color", i, -1)] = self.get_color(folder, frame_index, other_side, do_flip, do_crop, crop_params, do_cutout, cutout_params)
+                inputs[("color", i, -1)] = self.get_color(folder, frame_index, other_side, do_flip, do_crop, crop_params)
             else:
-                # inputs[("color", i, -1)] = self.get_color(folder, frame_index + i, side, do_flip, do_tr_aug, tr_params, do_crop, crop_params, do_rotate, rot_angle)
-                inputs[("color", i, -1)] = self.get_color(folder, frame_index + i, side, do_flip, do_tr_aug, tr_params, do_crop, crop_params)
-                # inputs[("color", i, -1)] = self.get_color(folder, frame_index + i, side, do_flip,do_tr_aug, tr_params, do_crop, crop_params, do_cutout, cutout_params)
+                # inputs[("color", i, -1)] = self.get_color(folder, frame_index + i, side, do_flip, do_crop, crop_params, do_cutout, cutout_params)
+                inputs[("color", i, -1)] = self.get_color(folder, frame_index + i, side, do_flip, do_crop, crop_params)
 
         # adjusting intrinsics to match each scale in the pyramid
         for scale in range(self.num_scales):
@@ -256,14 +252,12 @@ class MonoDataset(data.Dataset):
 
         return inputs
 
-    # def get_color(self, folder, frame_index, side, do_flip, do_tr_aug, tr_params,do_crop,crop_params,do_rotate, rot_angle):
+    
+    # def get_color(self, folder, frame_index, side, do_flip, do_crop,crop_params, do_cutout, cutout_params):
     #     raise NotImplementedError
     
-    def get_color(self, folder, frame_index, side, do_flip, do_tr_aug, tr_params,do_crop,crop_params):
+    def get_color(self, folder, frame_index, side, do_flip, do_crop,crop_params):
         raise NotImplementedError
-    
-    # def get_color(self, folder, frame_index, side, do_flip, do_tr_aug, tr_params, do_crop,crop_params, do_cutout, cutout_params):
-    #     raise NotImplementedError
 
     def check_depth(self):
         raise NotImplementedError
