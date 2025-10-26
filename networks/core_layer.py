@@ -308,6 +308,7 @@ class AsymDilatedConv(nn.Module):
         self.bn_pw  = nn.BatchNorm2d(outc)
         
         self.bn1 = nn.BatchNorm2d(outc, eps=1e-3, momentum=0.999)
+        # self.act = nn.GELU()
         self.act = nn.ReLU6()
         
         self.reduction_conv = nn.Conv2d(outc, inc, kernel_size=1)
@@ -329,10 +330,6 @@ class AsymDilatedConv(nn.Module):
         x = self.pw1x1(x)
         x = self.bn_pw(x)
         x = self.act(x)
-        
-        x = self.act(x1) * x2
-        x = self.conv2(self.g(x))
-        x = input + self.drop_path(x)
                 
         x = self.reduction_conv(x)
         x = self.bn2(x)
@@ -342,7 +339,6 @@ class AsymDilatedConv(nn.Module):
             return self.act(x)        
         else:
             return self.act(x)  
-
 
 # class AsymDilatedConv(nn.Module):
 #     def __init__(self, inc, outc, dilation, drop_path=0.0, residual=False):
