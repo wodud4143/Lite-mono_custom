@@ -283,7 +283,60 @@ class DilatedConv(nn.Module):
 #         x = self.bn2(x)
         
 #         return x
+
+
+# class AsymDilatedConv_v2(nn.Module):
+#     def __init__(self, inc, outc, kernel_size, drop_path=0.0, residual=False):
+#         super().__init__()
+#         self.residual = residual
+#         self.drop_path = DropPath(drop_path) if drop_path > 0 else nn.Identity()
+        
+#         # self.expansion_conv = nn.Conv2d(inc, outc, kernel_size=1)
+#         self.conv5x5 = nn.Conv2d(inc // 4, outc, 
+#                                  kernel_size=kernel_size,
+#                                  padding=2
+#                                  )
+#         self.conv1x5 = nn.Conv2d(inc // 4, outc, 
+#                                  kernel_size=(1, kernel_size),
+#                                  padding=(0, 2)
+#                                  )
+#         self.conv5x1 = nn.Conv2d(inc // 4, outc, 
+#                                  kernel_size=(kernel_size, 1),
+#                                  padding=(2, 0) 
+#                                  ) 
+        
+#         # self.dw3x3 = nn.Conv2d(outc, outc*4, 3, padding=dilation,
+#         #                dilation=dilation, groups=outc*2, bias=False)
+#         self.conv_exp = nn.Conv2d(outc, outc*4, 1, bias=False)
+#         self.conv_reduction = nn.Conv2d(outc*4, outc, 1, bias=False)
+        
+#         self.bn1 = nn.BatchNorm2d(outc, eps=1e-3, momentum=0.999)
+#         self.relu6 = nn.ReLU6()
+        
+#         self.layerScale = nn.Parameter(1e-6 * torch.ones((self.dims[0])), requires_grad=True) if 1e-6 > 0 else None
     
+    
+#     def forward(self, x):
+#         identity = x
+
+#         x1, x2, x3, x4 = torch.chunk(x, 4, dim=1)
+#         x1 = self.conv5x5(x1)
+#         x2 = self.conv1x5(x2)
+#         x3 = self.conv5x1(x3)
+        
+#         x = torch.cat([x1,x2, x3, x4],dim=1)
+#         x = self.bn1(x)
+
+#         x = self.conv_exp(x)
+#         x = self.relu6(x)
+#         x = self.conv_reduction(x)
+        
+#         x = self.layerScale(x)
+#         x = identity + x
+        
+#         return x
+
+
 class AsymDilatedConv(nn.Module):
     def __init__(self, inc, outc, dilation, drop_path=0.0, residual=False):
         super().__init__()
@@ -339,57 +392,6 @@ class AsymDilatedConv(nn.Module):
             return self.act(x)        
         else:
             return self.act(x)  
-
-# class AsymDilatedConv(nn.Module):
-#     def __init__(self, inc, outc, dilation, drop_path=0.0, residual=False):
-#         super().__init__()
-#         self.residual = residual
-#         self.drop_path = DropPath(drop_path) if drop_path > 0 else nn.Identity()
-        
-        
-#         self.conv1x5 = nn.Conv2d(inc, inc*2, kernel_size=(1, 5), padding=(0, 2*dilation), dilation=(1, dilation))
-#         self.conv5x1 = nn.Conv2d(inc, inc*2, kernel_size=(5, 1), padding=(2*dilation, 0), dilation=(dilation, 1))
-
-        
-#         self.bn1x5 = nn.BatchNorm2d(inc*2, eps=1e-3, momentum=0.999)
-#         self.bn5x1 = nn.BatchNorm2d(inc*2, eps=1e-3, momentum=0.999)
-        
-#         self.reduction_conv = nn.Conv2d(inc*2, inc, kernel_size=1)
-#         self.reduction_conv_bn = nn.BatchNorm2d(inc, eps=1e-3, momentum=0.999)
-        
-#         self.conv_3x3 = nn.Conv2d(inc, inc, 
-#                                  kernel_size=3,
-#                                  stride= 1,
-#                                  padding=1
-#                                  ) 
-#         self.conv_3x3_bn = nn.BatchNorm2d(inc, eps=1e-3, momentum=0.999)
-        
-#         self.act = nn.ReLU6(inplace=True)
-        
-        
-    
-#     def forward(self, x):
-#         # 채널 확장 (64 -> 128 -> 256)
-#         identity = x
-        
-#         x1 = self.conv1x5(x)
-#         x1 = self.bn1x5(x1)
-        
-#         x2 = self.conv5x1(x)
-#         x2 = self.bn5x1(x2)
-        
-#         x = torch.add(x1,x2)
-
-#         x = self.act(x) * x
-        
-#         x = self.reduction_conv_bn(self.reduction_conv(x))
-    
-#         x = self.conv_3x3_bn(self.conv_3x3(x))
-       
-#         x = identity + self.drop_path(x)
-        
-#         return x      
-
     
 # region - [Ghost]
 

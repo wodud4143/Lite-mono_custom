@@ -87,15 +87,20 @@ class MonoDataset(data.Dataset):
         draw = ImageDraw.Draw(img)
         h, w = img.size[1], img.size[0]
         
+        # 이미지의 아래쪽 절반 영역만 사용
+        h_start = h // 2  
+        
         for _ in range(n_holes):
-            y = random.randint(0, h)
+            # y 좌표는 h_start부터 h까지의 범위에서만 선택
+            # y = random.randint(h_start, h)
+            y = random.randint(h_start + length // 2, h - length // 2)
             x = random.randint(0, w)
             
-            y1 = max(0, y - length // 2)
+            y1 = max(h_start, y - length // 2)  # 최소값을 h_start로 제한
             y2 = min(h, y + length // 2)
             x1 = max(0, x - length // 2)
             x2 = min(w, x + length // 2)
-
+            
             draw.rectangle([x1, y1, x2, y2], fill=(0, 0, 0))
         
         return img
@@ -113,13 +118,32 @@ class MonoDataset(data.Dataset):
                 n, im, i = k
                 for i in range(self.num_scales):
                     inputs[(n, im, i)] = self.resize[i](inputs[(n, im, i - 1)])
-
+            elif "color_cutout" in k:
+                n, im, i = k
+                for i in range(self.num_scales):
+                    inputs[(n, im, i)] = self.resize[i](inputs[(n, im, i - 1)])
+                    
+                    
         for k in list(inputs):
             f = inputs[k]
             if "color" in k:
                 n, im, i = k
-                inputs[(n, im, i)] = self.to_tensor(f)
-                inputs[(n + "_aug", im, i)] = self.to_tensor(color_aug(f))
+                if n == "color":
+                    inputs[(n, im, i)] = self.to_tensor(f) # cutout 적용 X
+                    
+            elif "color_cutout" in k:  
+                n, im, i = k    
+                if n == "color_cutout": 
+                    inputs[("color_aug", im, i)] = self.to_tensor(color_aug(f)) # cutout 적용 O
+                    
+                    
+
+        # for k in list(inputs):
+        #     f = inputs[k]
+        #     if "color" in k:
+        #         n, im, i = k
+        #         inputs[(n, im, i)] = self.to_tensor(f)
+        #         inputs[(n + "_aug", im, i)] = self.to_tensor(color_aug(f))
         
 
     def __len__(self):
@@ -155,7 +179,7 @@ class MonoDataset(data.Dataset):
         do_flip = self.is_train and random.random() > 0.5
         # do_tr_aug = self.is_train and random.random() > 0.5
         do_crop = self.is_train and random.random() > 0.5
-        # do_cutout = self.is_train and random.random() > 0.5
+        do_cutout = self.is_train and random.random() > 0.5
 
 
         line = self.filenames[index].split()
@@ -184,14 +208,14 @@ class MonoDataset(data.Dataset):
             crop_params = None
             
             
-        # if do_cutout:
-        #     # Cutout parameters: 1-3 holes, size 50-150 pixels
-        #     cutout_params = {
-        #         'n_holes': random.randint(1, 3),
-        #         'length': random.randint(25, 50)
-        #     }
-        # else:
-        #     cutout_params = None
+        if do_cutout:
+            # Cutout parameters: 1-3 holes, size 50-150 pixels
+            cutout_params = {
+                'n_holes': 1,
+                'length': random.randint(25, 50)
+            }
+        else:
+            cutout_params = None
             
         # if do_rotate:
         #     rot_angle =  random.choice([-1, 1]) * random.uniform(20, 25)
@@ -203,14 +227,21 @@ class MonoDataset(data.Dataset):
         # else:
         #     tr_params = (0, 0)
 
+        # region 오리지널 컷아웃 제거
         for i in self.frame_idxs:
             if i == "s":
                 other_side = {"r": "l", "l": "r"}[side]
+                
+                color_original, color_with_cutout  = self.get_color(folder, frame_index, other_side, do_flip, do_crop, crop_params, do_cutout, cutout_params)
+                inputs[("color", i, -1)] = color_original
+                inputs[("color_cutout", i, -1)] = color_with_cutout
                 # inputs[("color", i, -1)] = self.get_color(folder, frame_index, other_side, do_flip, do_crop, crop_params, do_cutout, cutout_params)
-                inputs[("color", i, -1)] = self.get_color(folder, frame_index, other_side, do_flip, do_crop, crop_params)
+
             else:
+                color_original, color_with_cutout = self.get_color(folder, frame_index + i, side, do_flip, do_crop, crop_params, do_cutout, cutout_params)
+                inputs[("color", i, -1)] = color_original
+                inputs[("color_cutout", i, -1)] = color_with_cutout
                 # inputs[("color", i, -1)] = self.get_color(folder, frame_index + i, side, do_flip, do_crop, crop_params, do_cutout, cutout_params)
-                inputs[("color", i, -1)] = self.get_color(folder, frame_index + i, side, do_flip, do_crop, crop_params)
 
         # adjusting intrinsics to match each scale in the pyramid
         for scale in range(self.num_scales):
@@ -236,6 +267,10 @@ class MonoDataset(data.Dataset):
         for i in self.frame_idxs:
             del inputs[("color", i, -1)]
             del inputs[("color_aug", i, -1)]
+            del inputs[("color_cutout", i, -1)] #add
+            for scale in range(self.num_scales):
+                if ("color_cutout", i, scale) in inputs:
+                    del inputs[("color_cutout", i, scale)]
 
         if self.load_depth:
             depth_gt = self.get_depth(folder, frame_index, side, do_flip)
@@ -253,11 +288,9 @@ class MonoDataset(data.Dataset):
         return inputs
 
     
-    # def get_color(self, folder, frame_index, side, do_flip, do_crop,crop_params, do_cutout, cutout_params):
-    #     raise NotImplementedError
-    
-    def get_color(self, folder, frame_index, side, do_flip, do_crop,crop_params):
+    def get_color(self, folder, frame_index, side, do_flip, do_crop,crop_params, do_cutout, cutout_params):
         raise NotImplementedError
+    
 
     def check_depth(self):
         raise NotImplementedError

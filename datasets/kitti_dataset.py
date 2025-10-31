@@ -39,8 +39,8 @@ class KITTIDataset(MonoDataset):
 
         return os.path.isfile(velo_filename)
 
-    def get_color(self, folder, frame_index, side, do_flip, do_crop,crop_params):
-    # def get_color(self, folder, frame_index, side, do_flip, do_crop,crop_params, do_cutout, cutout_params):
+    # def get_color(self, folder, frame_index, side, do_flip, do_crop,crop_params):
+    def get_color(self, folder, frame_index, side, do_flip, do_crop,crop_params, do_cutout, cutout_params):
         color = self.loader(self.get_image_path(folder, frame_index, side))
 
         if do_flip:
@@ -53,7 +53,14 @@ class KITTIDataset(MonoDataset):
             crop_x, crop_y, crop_w, crop_h = crop_params
             color = color.crop((crop_x, crop_y, crop_x + crop_w, crop_y + crop_h))
             
-
+        # cutout 적용 전 저장 
+         
+        if do_cutout and cutout_params is not None:
+            # Cutout 적용
+            color_with_cutout = self.apply_cutout(color, 
+                                    n_holes=cutout_params['n_holes'], 
+                                    length=cutout_params['length'])
+        else: color_with_cutout = color
 
         # if do_tr_aug:
 
@@ -92,14 +99,8 @@ class KITTIDataset(MonoDataset):
         #     color = tensor_to_pil(translated_tensor)
         
         
-        # if do_cutout and cutout_params is not None:
-        #     # Cutout 적용
-        #     color = self.apply_cutout(color, 
-        #                             n_holes=cutout_params['n_holes'], 
-        #                             length=cutout_params['length'])
-                    
-
-        return color
+        return color, color_with_cutout
+        # return color
 
 
 class KITTIRAWDataset(KITTIDataset):

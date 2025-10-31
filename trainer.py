@@ -700,6 +700,9 @@ class Trainer:
                     writer.add_image(
                         "color_{}_{}/{}".format(frame_id, s, j),
                         inputs[("color", frame_id, s)][j].data, self.step)
+                    writer.add_image(
+                        "color_aug_{}_{}/{}".format(frame_id, s, j),
+                        inputs[("color_aug", frame_id, s)][j].data, self.step)
                     if s == 0 and frame_id != 0:
                         writer.add_image(
                             "color_pred_{}_{}/{}".format(frame_id, s, j),
@@ -755,7 +758,7 @@ class Trainer:
                current_sq_rel < self.best_sq_rel and
                current_rmse_log < self.best_rmse_log)
     
-        force_save = self.epoch == 19 or self.epoch == 49
+        force_save = self.epoch == 19 or self.epoch == 49 or self.epoch == 99
         
         
         if is_best or force_save :

@@ -34,11 +34,6 @@ class LiteMono(nn.Module):
             
         for g in global_block_type:
             assert g in ['None', 'LGFI']
-
-
-        # self.avg_pool2 = clayers.AvgPool(ratio=2) # 1/2
-        # self.avg_pool4 = clayers.AvgPool(ratio=4) # 1/4
-        # self.avg_pool8 = clayers.AvgPool(ratio=8) # 1/8
         
         self.input_conv_s2 = clayers.StandardConv(in_chans, self.dims[0], kernel_size=3, stride=2, padding=1, bn_act=True) # 1/2
         self.input_conv_s4 = clayers.StandardConv(in_chans, self.dims[0], kernel_size=3, stride=4, padding=1, bn_act=True) # 1/4
@@ -121,7 +116,7 @@ class LiteMono(nn.Module):
                                   requires_grad=True) if layer_scale_init_value > 0 else None
         
         # StarModule
-        # self.star = core.Star(dim=self.dims[0], mlp_ratio=3)
+        self.star = core.Star(dim=self.dims[0], mlp_ratio=3)
         
         self.apply(self._init_weights)
 
@@ -143,14 +138,13 @@ class LiteMono(nn.Module):
         
         
         x_down2 = self.input_conv_s2(x) # 3, 32
-        # x_down2 = self.star(x_down2) # 3, 32
         x_down4 = self.input_conv_s4(x) # 3, 32
         x_down8 = self.input_conv_s8(x) # 3, 64
         
         """(32, 96, 320)"""
         ds2 = self.init_conv(x) # 3 ,32
         
-        """(32, 96, 320)"""
+        """(32, 96, 320)"""                                                  
         if self.gamma_24 is not None:
             x_down2 = x_down2.permute(0, 2, 3, 1)
             x_down2 = self.gamma_24 * x_down2

@@ -59,11 +59,14 @@ import os
 import re
 import shutil
 import networks
+import datasets
 
 def save_network(modelname, dir):
     # networks 패키지 경로
     NETWORKS_DIR = os.path.dirname(networks.__file__)
     INIT_FILE = os.path.join(NETWORKS_DIR, "__init__.py")
+    
+    DATASETS_DIR = os.path.dirname(datasets.__file__)
     # 목적지 경로
     TARGET_DIR = dir
     os.makedirs(TARGET_DIR, exist_ok=True)
@@ -77,6 +80,8 @@ def save_network(modelname, dir):
     
     # 항상 복사할 추가 파일들
     additional_files = ["core_layer.py", "custom_layers.py"]
+    
+    dataset_files = ["kitti_dataset.py", "mono_dataset.py"]
     
     # __init__.py 읽기
     with open(INIT_FILE, "r", encoding="utf-8") as f:
@@ -135,4 +140,15 @@ def save_network(modelname, dir):
             print(f"{additional_file} → {dst_path} 로 복사 완료")
         else:
             print(f"⚠ {additional_file} 없음 (건너뜀)")
+            
+            
+    # datasets 파일들 복사 (import 구문 수정 포함)
+    for dataset_file in dataset_files:
+        src_path = os.path.join(DATASETS_DIR, dataset_file)
+        dst_path = os.path.join(TARGET_DIR, dataset_file)
+        if os.path.exists(src_path):
+            copy_and_modify_file(src_path, dst_path, name)
+            print(f"{dataset_file} → {dst_path} 로 복사 완료")
+        else:
+            print(f"⚠ {dataset_file} 없음 (건너뜀)")
 

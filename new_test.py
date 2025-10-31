@@ -244,7 +244,7 @@ def test_simple(args,epoch,modelname):
 
 def direct():
 
-    directory = r"C:\Users\wodud\OneDrive\Desktop\도로주행 데이터\v4_3_R_a3_gm_cutout_best" 
+    directory = r"C:\Users\wodud\OneDrive\Desktop\도로주행 데이터\best_star_50" 
 
     folders = [os.path.join(directory, f) for f in os.listdir(directory) if os.path.isdir(os.path.join(directory, f))]
 
@@ -256,8 +256,8 @@ def direct():
 
 
 if __name__ == '__main__':
-    modelname = "v4_3_R_a3_gm_cutout"
-    epoch = 7
+    modelname = "best_star"
+    epoch = 49
     args = parse_args()
     test_simple(args,epoch=epoch, modelname=modelname)
 
