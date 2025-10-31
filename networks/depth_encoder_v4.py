@@ -71,9 +71,12 @@ class LiteMono(nn.Module):
         dp_rates = [x.item() for x in torch.linspace(0, drop_path_rate, sum(self.depth))]
 
         stage_blocks = [
-            core.AsymDilatedConv(inc=self.dims[0], outc=self.asym_dims[0], dilation=self.dilation[0][0],drop_path=dp_rates[0],residual=True),
-            core.AsymDilatedConv(inc=self.dims[0], outc=self.asym_dims[0], dilation=self.dilation[0][1],drop_path=dp_rates[0 + 1],residual=True),
-            # core.AsymDilatedConv(inc=self.dims[0], outc=self.asym_dims[0], dilation=self.dilation[0][2],drop_path=dp_rates[0 + 2],residual=True),
+            # core.AsymDilatedConv(inc=self.dims[0], outc=self.asym_dims[0], dilation=self.dilation[0][0],drop_path=dp_rates[0],residual=True),
+            # core.AsymDilatedConv(inc=self.dims[0], outc=self.asym_dims[0], dilation=self.dilation[0][1],drop_path=dp_rates[0 + 1],residual=True),
+            
+            core.AsymDilatedConv_v2(inc=self.dims[0], outc=self.asym_dims[0], kernel_size = 5),
+            core.AsymDilatedConv_v2(inc=self.dims[0], outc=self.asym_dims[0], kernel_size = 5),
+            
             core.LGFI(dim=self.dims[0], 
                       drop_path=dp_rates[0 + 2], 
                       expan_ratio=expan_ratio,
@@ -84,9 +87,12 @@ class LiteMono(nn.Module):
         self.stages.append(nn.Sequential(*stage_blocks))
         
         stage_blocks = [
-            core.AsymDilatedConv(inc=self.dims[1], outc=self.asym_dims[1], dilation=self.dilation[1][0],drop_path=dp_rates[2 + 1],residual=True),
-            core.AsymDilatedConv(inc=self.dims[1], outc=self.asym_dims[1], dilation=self.dilation[1][1],drop_path=dp_rates[2 + 2],residual=True),
-            # core.AsymDilatedConv(inc=self.dims[1], outc=self.asym_dims[1], dilation=self.dilation[1][2],drop_path=dp_rates[3 + 3],residual=True),
+            # core.AsymDilatedConv(inc=self.dims[1], outc=self.asym_dims[1], dilation=self.dilation[1][0],drop_path=dp_rates[2 + 1],residual=True),
+            # core.AsymDilatedConv(inc=self.dims[1], outc=self.asym_dims[1], dilation=self.dilation[1][1],drop_path=dp_rates[2 + 2],residual=True),
+            
+            core.AsymDilatedConv_v2(inc=self.dims[1], outc=self.asym_dims[1], kernel_size = 5),
+            core.AsymDilatedConv_v2(inc=self.dims[1], outc=self.asym_dims[1],kernel_size = 5 ),
+            
             core.LGFI(dim=self.dims[1], 
                       drop_path=dp_rates[2 + 3], 
                       expan_ratio=expan_ratio,
@@ -97,9 +103,14 @@ class LiteMono(nn.Module):
         self.stages.append(nn.Sequential(*stage_blocks))
         
         stage_blocks = [
-            core.AsymDilatedConv(inc=self.dims[2], outc=self.asym_dims[2], dilation=self.dilation[2][0],drop_path=dp_rates[5 + 1],residual=True),
-            core.AsymDilatedConv(inc=self.dims[2], outc=self.asym_dims[2], dilation=self.dilation[2][1],drop_path=dp_rates[5 + 2],residual=True),
-            core.AsymDilatedConv(inc=self.dims[2], outc=self.asym_dims[2], dilation=self.dilation[2][2],drop_path=dp_rates[5 + 3],residual=True),
+            # core.AsymDilatedConv(inc=self.dims[2], outc=self.asym_dims[2], dilation=self.dilation[2][0],drop_path=dp_rates[5 + 1],residual=True),
+            # core.AsymDilatedConv(inc=self.dims[2], outc=self.asym_dims[2], dilation=self.dilation[2][1],drop_path=dp_rates[5 + 2],residual=True),
+            # core.AsymDilatedConv(inc=self.dims[2], outc=self.asym_dims[2], dilation=self.dilation[2][2],drop_path=dp_rates[5 + 3],residual=True),
+            
+            core.AsymDilatedConv_v2(inc=self.dims[2], outc=self.asym_dims[2],kernel_size = 5 ),
+            core.AsymDilatedConv_v2(inc=self.dims[2], outc=self.asym_dims[2], kernel_size = 5),
+            core.AsymDilatedConv_v2(inc=self.dims[2], outc=self.asym_dims[2], kernel_size = 5),
+            
             core.LGFI(dim=self.dims[2], 
                       drop_path=dp_rates[5 + 4], 
                       expan_ratio=expan_ratio,
@@ -116,7 +127,7 @@ class LiteMono(nn.Module):
                                   requires_grad=True) if layer_scale_init_value > 0 else None
         
         # StarModule
-        self.star = core.Star(dim=self.dims[0], mlp_ratio=3)
+        # self.star = core.Star(dim=self.dims[0], mlp_ratio=3)
         
         self.apply(self._init_weights)
 
@@ -145,10 +156,14 @@ class LiteMono(nn.Module):
         ds2 = self.init_conv(x) # 3 ,32
         
         """(32, 96, 320)"""                                                  
+        # if self.gamma_24 is not None:
+        #     x_down2 = x_down2.permute(0, 2, 3, 1)
+        #     x_down2 = self.gamma_24 * x_down2
+        #     x_down2 = x_down2.permute(0, 3, 1, 2)
+        #     ds2 = torch.add(ds2, x_down2)
+        
         if self.gamma_24 is not None:
-            x_down2 = x_down2.permute(0, 2, 3, 1)
-            x_down2 = self.gamma_24 * x_down2
-            x_down2 = x_down2.permute(0, 3, 1, 2)
+            x_down2 = self.gamma_24.view(1, -1, 1, 1) * x_down2
             ds2 = torch.add(ds2, x_down2)
 
         
@@ -163,11 +178,15 @@ class LiteMono(nn.Module):
         
         
         """(32, 48, 160)"""
+        # if self.gamma_24 is not None:
+        #     x_down4 = x_down4.permute(0, 2, 3, 1)
+        #     x_down4 = self.gamma_24 * x_down4
+        #     x_down4 = x_down4.permute(0, 3, 1, 2)
+        #     add_ds4 = torch.add(ds4, x_down4)  
+        
         if self.gamma_24 is not None:
-            x_down4 = x_down4.permute(0, 2, 3, 1)
-            x_down4 = self.gamma_24 * x_down4
-            x_down4 = x_down4.permute(0, 3, 1, 2)
-            add_ds4 = torch.add(ds4, x_down4)  
+            x_down4 = self.gamma_24.view(1, -1, 1, 1) * x_down4
+            add_ds4 = torch.add(ds4, x_down4)
         
         
         """(64, 24, 80)"""
@@ -181,11 +200,16 @@ class LiteMono(nn.Module):
         
         
         """(64, 24, 80)"""
-        if self.gamma_8 is not None:
-            x_down8 = x_down8.permute(0, 2, 3, 1)
-            x_down8 = self.gamma_8 * x_down8
-            x_down8 = x_down8.permute(0, 3, 1, 2)
+        # if self.gamma_8 is not None:
+        #     x_down8 = x_down8.permute(0, 2, 3, 1)
+        #     x_down8 = self.gamma_8 * x_down8
+        #     x_down8 = x_down8.permute(0, 3, 1, 2)
+        #     add_ds8 = torch.add(ds8, x_down8)
+        
+        if self.gamma_24 is not None:
+            x_down8 = self.gamma_8.view(1, -1, 1, 1) * x_down8
             add_ds8 = torch.add(ds8, x_down8)
+        
         
         
         """(128, 12, 40)"""
