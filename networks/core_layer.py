@@ -285,116 +285,116 @@ class DilatedConv(nn.Module):
 #         return x
 
 # region AsymDilatedConv_v2
-class AsymDilatedConv_v2(nn.Module): 
-    def __init__(self, inc, outc, kernel_size, drop_path=0.0, residual=False):
-        super().__init__()
-        self.residual = residual
-        self.drop_path = DropPath(drop_path) if drop_path > 0 else nn.Identity()
-        padding = kernel_size // 2
-        
-        # self.expansion_conv = nn.Conv2d(inc, outc, kernel_size=1)
-        self.conv5x5 = nn.Conv2d(inc // 4, inc // 4, 
-                                 kernel_size=kernel_size,
-                                 padding=padding
-                                 )
-        self.conv1x5 = nn.Conv2d(inc // 4, inc // 4, 
-                                 kernel_size=(1, kernel_size),
-                                 padding=(0, padding)
-                                 )
-        self.conv5x1 = nn.Conv2d(inc // 4, inc // 4, 
-                                 kernel_size=(kernel_size, 1),
-                                 padding=(padding, 0) 
-                                 ) 
-        # self.dw3x3 = nn.Conv2d(outc, outc*4, 3, padding=dilation,
-        #                dilation=dilation, groups=outc*2, bias=False)
-        self.conv_exp = nn.Conv2d(inc, inc*4, 1, bias=False)
-        self.conv_reduction = nn.Conv2d(inc*4, inc, 1, bias=False)
-        
-        self.bn1 = nn.BatchNorm2d(inc, eps=1e-3, momentum=0.999)
-        self.relu6 = nn.ReLU6()
-        
-        self.layerScale = nn.Parameter(1e-6 * torch.ones((inc)), requires_grad=True) if 1e-6 > 0 else None
-    
-    
-    def forward(self, x):
-        identity = x
-
-        x1, x2, x3, x4 = torch.chunk(x, 4, dim=1)
-        x1 = self.conv5x5(x1)
-        x2 = self.conv1x5(x2)
-        x3 = self.conv5x1(x3)
-        
-        x = torch.cat([x1,x2, x3, x4],dim=1)
-        x = self.bn1(x)
-
-        x = self.conv_exp(x)
-        x = self.relu6(x)
-        x = self.conv_reduction(x)
-        
-        
-        if self.layerScale is not None:
-            x = self.layerScale.view(1, -1, 1, 1) * x
-        
-        x = identity + x
-        
-        return x
-
-
-# class AsymDilatedConv(nn.Module):
-#     def __init__(self, inc, outc, dilation, drop_path=0.0, residual=False):
+# class AsymDilatedConv_v2(nn.Module): 
+#     def __init__(self, inc, outc, kernel_size, drop_path=0.0, residual=False):
 #         super().__init__()
 #         self.residual = residual
 #         self.drop_path = DropPath(drop_path) if drop_path > 0 else nn.Identity()
+#         padding = kernel_size // 2
         
-#         self.expansion_conv = nn.Conv2d(inc, outc, kernel_size=1)
-        
-#         self.conv1x5 = nn.Conv2d(outc, outc, 
-#                                  kernel_size=(1, 5),
-#                                  padding=(0, 2)
+#         # self.expansion_conv = nn.Conv2d(inc, outc, kernel_size=1)
+#         self.conv5x5 = nn.Conv2d(inc // 4, inc // 4, 
+#                                  kernel_size=kernel_size,
+#                                  padding=padding
 #                                  )
-#         self.conv5x1 = nn.Conv2d(outc, outc, 
-#                                  kernel_size=(5, 1),
-#                                  padding=(2, 0) 
+#         self.conv1x5 = nn.Conv2d(inc // 4, inc // 4, 
+#                                  kernel_size=(1, kernel_size),
+#                                  padding=(0, padding)
+#                                  )
+#         self.conv5x1 = nn.Conv2d(inc // 4, inc // 4, 
+#                                  kernel_size=(kernel_size, 1),
+#                                  padding=(padding, 0) 
 #                                  ) 
+#         # self.dw3x3 = nn.Conv2d(outc, outc*4, 3, padding=dilation,
+#         #                dilation=dilation, groups=outc*2, bias=False)
+#         self.conv_exp = nn.Conv2d(inc, inc*4, 1, bias=False)
+#         self.conv_reduction = nn.Conv2d(inc*4, inc, 1, bias=False)
         
-#         self.dw3x3 = nn.Conv2d(outc*2, outc*2, 3, padding=dilation,
-#                        dilation=dilation, groups=outc*2, bias=False)
-#         self.pw1x1 = nn.Conv2d(outc*2, outc, 1, bias=False)
-#         self.bn_dw  = nn.BatchNorm2d(outc*2)
-#         self.bn_pw  = nn.BatchNorm2d(outc)
+#         self.bn1 = nn.BatchNorm2d(inc, eps=1e-3, momentum=0.999)
+#         self.relu6 = nn.ReLU6()
         
-#         self.bn1 = nn.BatchNorm2d(outc, eps=1e-3, momentum=0.999)
-#         # self.act = nn.GELU()
-#         self.act = nn.ReLU6()
-        
-#         self.reduction_conv = nn.Conv2d(outc, inc, kernel_size=1)
-#         self.bn2 = nn.BatchNorm2d(inc, eps=1e-3, momentum=0.999)
+#         self.layerScale = nn.Parameter(1e-6 * torch.ones((inc)), requires_grad=True) if 1e-6 > 0 else None
+    
     
 #     def forward(self, x):
-#         # 채널 확장 (64 -> 128 -> 256)
 #         identity = x
-#         x = self.expansion_conv(x)
-        
-#         x1 = self.conv1x5(x)
-#         x2 = self.conv5x1(x)
-        
-#         x = torch.cat([x1,x2],dim=1)
 
-#         x = self.dw3x3(x)
-#         x = self.bn_dw(x)
-#         x = self.act(x)
-#         x = self.pw1x1(x)
-#         x = self.bn_pw(x)
-#         x = self.act(x)
-                
-#         x = self.reduction_conv(x)
-#         x = self.bn2(x)
+#         x1, x2, x3, x4 = torch.chunk(x, 4, dim=1)
+#         x1 = self.conv5x5(x1)
+#         x2 = self.conv1x5(x2)
+#         x3 = self.conv5x1(x3)
         
-#         if self.residual:
-#             x = identity + self.drop_path(x)
-#             return self.act(x)        
-#         else:
-#             return self.act(x)  
+#         x = torch.cat([x1,x2, x3, x4],dim=1)
+#         x = self.bn1(x)
+
+#         x = self.conv_exp(x)
+#         x = self.relu6(x)
+#         x = self.conv_reduction(x)
+        
+        
+#         if self.layerScale is not None:
+#             x = self.layerScale.view(1, -1, 1, 1) * x
+        
+#         x = identity + x
+        
+#         return x
+
+
+class AsymDilatedConv(nn.Module):
+    def __init__(self, inc, outc, dilation, drop_path=0.0, residual=False):
+        super().__init__()
+        self.residual = residual
+        self.drop_path = DropPath(drop_path) if drop_path > 0 else nn.Identity()
+        
+        self.expansion_conv = nn.Conv2d(inc, outc, kernel_size=1)
+        
+        self.conv1x5 = nn.Conv2d(outc, outc, 
+                                 kernel_size=(1, 5),
+                                 padding=(0, 2)
+                                 )
+        self.conv5x1 = nn.Conv2d(outc, outc, 
+                                 kernel_size=(5, 1),
+                                 padding=(2, 0) 
+                                 ) 
+        
+        self.dw3x3 = nn.Conv2d(outc*2, outc*2, 3, padding=dilation,
+                       dilation=dilation, groups=outc*2, bias=False)
+        self.pw1x1 = nn.Conv2d(outc*2, outc, 1, bias=False)
+        self.bn_dw  = nn.BatchNorm2d(outc*2)
+        self.bn_pw  = nn.BatchNorm2d(outc)
+        
+        self.bn1 = nn.BatchNorm2d(outc, eps=1e-3, momentum=0.999)
+        # self.act = nn.GELU()
+        self.act = nn.ReLU6()
+        
+        self.reduction_conv = nn.Conv2d(outc, inc, kernel_size=1)
+        self.bn2 = nn.BatchNorm2d(inc, eps=1e-3, momentum=0.999)
+    
+    def forward(self, x):
+        # 채널 확장 (64 -> 128 -> 256)
+        identity = x
+        x = self.expansion_conv(x)
+        
+        x1 = self.conv1x5(x)
+        x2 = self.conv5x1(x)
+        
+        x = torch.cat([x1,x2],dim=1)
+
+        x = self.dw3x3(x)
+        x = self.bn_dw(x)
+        x = self.act(x)
+        x = self.pw1x1(x)
+        x = self.bn_pw(x)
+        x = self.act(x)
+                
+        x = self.reduction_conv(x)
+        x = self.bn2(x)
+        
+        if self.residual:
+            x = identity + self.drop_path(x)
+            return self.act(x)        
+        else:
+            return self.act(x)  
     
 # region - [Ghost]
 
@@ -453,6 +453,55 @@ class CustomGhostModule(nn.Module):
         x = x + identity
         return x
 
+
+# class CustomGhostModule(nn.Module):
+#     def __init__(self, inc, outc = None, exp=2):
+#         super().__init__()
+
+#         self.midc = inc * 2
+#         c_half = self.midc // 2
+        
+
+#         self.expand_pw = nn.Conv2d(inc, inc * exp, kernel_size=1, bias=False)
+#         self.expand_bn = nn.BatchNorm2d(self.midc,eps=1e-3, momentum=0.999)
+        
+#         self.reduce_pw = nn.Conv2d(c_half, inc, kernel_size=1, bias=False)
+#         self.reduce_bn = nn.BatchNorm2d(inc ,eps=1e-3, momentum=0.999)
+        
+#         self.conv1x1 = nn.Conv2d(inc * exp, c_half, kernel_size=1, bias=False)
+
+#         self.ex_conv = nn.Conv2d(c_half, c_half, kernel_size=3, padding=1, bias=False)
+#         self.ex_bn = nn.BatchNorm2d(c_half,eps=1e-3, momentum=0.999)
+        
+#         self.ch_conv = nn.Conv2d(c_half, c_half, kernel_size=3, padding=2, dilation=2, bias=False)
+#         self.ch_bn = nn.BatchNorm2d(c_half,eps=1e-3, momentum=0.999)
+#         # self.act = nn.GELU()
+#         self.act = nn.ReLU6()
+   
+        
+#     def forward(self, x):
+#         identity = x
+
+#         x = self.expand_pw(x)
+#         x = self.expand_bn(x)
+#         x = self.act(x)
+        
+#         x1 = self.ex_conv(x)
+#         x1 = self.ex_bn(x1)
+#         x1 = self.act(x1)
+        
+#         x2 = self.ch_conv(x1)
+#         x2 = self.ch_bn(x2)
+#         x2 = self.act(x2)
+
+        
+#         x = x1 * x2 
+        
+#         x = self.reduce_pw(x)
+#         x = self.reduce_bn(x)
+        
+#         x = x + identity
+#         return x
 
 # region [StarModule]
 class ConvBN(torch.nn.Sequential):

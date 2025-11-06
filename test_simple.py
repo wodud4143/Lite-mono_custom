@@ -29,12 +29,12 @@ def parse_args():
 
     parser.add_argument('--image_path', type=str, nargs='+',
                         help='path to a test image or folder of images',
-                        default= direct()
+                        default= ["test.jpg"]
                         )# required=True
 
     parser.add_argument('--load_weights_folder', type=str,
                         help='path of a pretrained model to use',
-                        default='experiments/logs/v4.1/models/weights_19'
+                        default='lite-mono_640x192'
                         )
 
     parser.add_argument('--test',
@@ -192,8 +192,8 @@ def test_simple(args):
                     
                     
 
-                    name_dest_npy = os.path.join(output_directory, "{}_disp.npy".format(output_name))
-                    np.save(name_dest_npy, scaled_disp.cpu().numpy())
+                    # name_dest_npy = os.path.join(output_directory, "{}_disp.npy".format(output_name))
+                    # np.save(name_dest_npy, scaled_disp.cpu().numpy())
 
                     # Saving colormapped depth image
                     disp_resized_np = disp_resized.squeeze().cpu().numpy()

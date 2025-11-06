@@ -2,13 +2,90 @@ import numpy as np
 import torch
 from torch import nn
 import torch.nn.functional as F
-from timm.layers import DropPath
+from timm.models.layers import DropPath
 import math
 import torch.cuda
 
-from networks.core_layer import LGFI
+
+class PositionalEncodingFourier(nn.Module):
+    """
+    Positional encoding relying on a fourier kernel matching the one used in the
+    "Attention is all of Need" paper. The implementation builds on DeTR code
+    https://github.com/facebookresearch/detr/blob/master/models/position_encoding.py
+    """
+
+    def __init__(self, hidden_dim=32, dim=768, temperature=10000):
+        super().__init__()
+        self.token_projection = nn.Conv2d(hidden_dim * 2, dim, kernel_size=1)
+        self.scale = 2 * math.pi
+        self.temperature = temperature
+        self.hidden_dim = hidden_dim
+        self.dim = dim
+
+    def forward(self, B, H, W):
+        mask = torch.zeros(B, H, W).bool().to(self.token_projection.weight.device)
+        not_mask = ~mask
+        y_embed = not_mask.cumsum(1, dtype=torch.float32)
+        x_embed = not_mask.cumsum(2, dtype=torch.float32)
+        eps = 1e-6
+        y_embed = y_embed / (y_embed[:, -1:, :] + eps) * self.scale
+        x_embed = x_embed / (x_embed[:, :, -1:] + eps) * self.scale
+
+        dim_t = torch.arange(self.hidden_dim, dtype=torch.float32, device=mask.device)
+        dim_t = self.temperature ** (2 * (dim_t // 2) / self.hidden_dim)
+
+        pos_x = x_embed[:, :, :, None] / dim_t
+        pos_y = y_embed[:, :, :, None] / dim_t
+        pos_x = torch.stack((pos_x[:, :, :, 0::2].sin(),
+                             pos_x[:, :, :, 1::2].cos()), dim=4).flatten(3)
+        pos_y = torch.stack((pos_y[:, :, :, 0::2].sin(),
+                             pos_y[:, :, :, 1::2].cos()), dim=4).flatten(3)
+        pos = torch.cat((pos_y, pos_x), dim=3).permute(0, 3, 1, 2)
+        pos = self.token_projection(pos)
+        return pos
 
 
+class XCA(nn.Module):
+    """ Cross-Covariance Attention (XCA) operation where the channels are updated using a weighted
+     sum. The weights are obtained from the (softmax normalized) Cross-covariance
+    matrix (Q^T K \\in d_h \\times d_h)
+    """
+
+    def __init__(self, dim, num_heads=8, qkv_bias=False, qk_scale=None, attn_drop=0., proj_drop=0.):
+        super().__init__()
+        self.num_heads = num_heads
+        self.temperature = nn.Parameter(torch.ones(num_heads, 1, 1))
+
+        self.qkv = nn.Linear(dim, dim * 3, bias=qkv_bias)
+        self.attn_drop = nn.Dropout(attn_drop)
+        self.proj = nn.Linear(dim, dim)
+        self.proj_drop = nn.Dropout(proj_drop)
+
+    def forward(self, x):
+        B, N, C = x.shape
+        qkv = self.qkv(x).reshape(B, N, 3, self.num_heads, C // self.num_heads)
+        qkv = qkv.permute(2, 0, 3, 1, 4)
+        q, k, v = qkv[0], qkv[1], qkv[2]
+
+        q = q.transpose(-2, -1)
+        k = k.transpose(-2, -1)
+        v = v.transpose(-2, -1)
+
+        q = torch.nn.functional.normalize(q, dim=-1)
+        k = torch.nn.functional.normalize(k, dim=-1)
+
+        attn = (q @ k.transpose(-2, -1)) * self.temperature
+        attn = attn.softmax(dim=-1)
+        attn = self.attn_drop(attn)
+
+        x = (attn @ v).permute(0, 3, 1, 2).reshape(B, N, C)
+        x = self.proj(x)
+        x = self.proj_drop(x)
+        return x
+
+    @torch.jit.ignore
+    def no_weight_decay(self):
+        return {'temperature'}
 
 
 class LayerNorm(nn.Module):
@@ -144,7 +221,60 @@ class DilatedConv(nn.Module):
         return x
 
 
+class LGFI(nn.Module):
+    """
+    Local-Global Features Interaction
+    """
+    def __init__(self, dim, drop_path=0., layer_scale_init_value=1e-6, expan_ratio=6,
+                 use_pos_emb=True, num_heads=6, qkv_bias=True, attn_drop=0., drop=0.):
+        super().__init__()
 
+        self.dim = dim
+        self.pos_embd = None
+        if use_pos_emb:
+            self.pos_embd = PositionalEncodingFourier(dim=self.dim)
+
+        self.norm_xca = LayerNorm(self.dim, eps=1e-6)
+
+        self.gamma_xca = nn.Parameter(layer_scale_init_value * torch.ones(self.dim),
+                                      requires_grad=True) if layer_scale_init_value > 0 else None
+        self.xca = XCA(self.dim, num_heads=num_heads, qkv_bias=qkv_bias, attn_drop=attn_drop, proj_drop=drop)
+
+        self.norm = LayerNorm(self.dim, eps=1e-6)
+        self.pwconv1 = nn.Linear(self.dim, expan_ratio * self.dim)
+        self.act = nn.GELU()
+        self.pwconv2 = nn.Linear(expan_ratio * self.dim, self.dim)
+        self.gamma = nn.Parameter(layer_scale_init_value * torch.ones((self.dim)),
+                                  requires_grad=True) if layer_scale_init_value > 0 else None
+        self.drop_path = DropPath(drop_path) if drop_path > 0. else nn.Identity()
+
+    def forward(self, x):
+        input_ = x
+
+        # XCA
+        B, C, H, W = x.shape
+        x = x.reshape(B, C, H * W).permute(0, 2, 1)
+
+        if self.pos_embd:
+            pos_encoding = self.pos_embd(B, H, W).reshape(B, -1, x.shape[1]).permute(0, 2, 1)
+            x = x + pos_encoding
+
+        x = x + self.gamma_xca * self.xca(self.norm_xca(x))
+
+        x = x.reshape(B, H, W, C)
+
+        # Inverted Bottleneck
+        x = self.norm(x)
+        x = self.pwconv1(x)
+        x = self.act(x)
+        x = self.pwconv2(x)
+        if self.gamma is not None:
+            x = self.gamma * x
+        x = x.permute(0, 3, 1, 2)  # (N, H, W, C) -> (N, C, H, W)
+
+        x = input_ + self.drop_path(x)
+
+        return x
 
 
 class AvgPool(nn.Module):
@@ -161,7 +291,6 @@ class AvgPool(nn.Module):
         return x
 
 
-# region - Main Arch
 class LiteMono(nn.Module):
     """
     Lite-Mono
@@ -177,12 +306,37 @@ class LiteMono(nn.Module):
             self.num_ch_enc = np.array([48, 80, 128])
             self.depth = [4, 4, 10]
             self.dims = [48, 80, 128]
-            
             if height == 192 and width == 640:
                 self.dilation = [[1, 2, 3], [1, 2, 3], [1, 2, 3, 1, 2, 3, 2, 4, 6]]
             elif height == 320 and width == 1024:
                 self.dilation = [[1, 2, 5], [1, 2, 5], [1, 2, 5, 1, 2, 5, 2, 4, 10]]
 
+        elif model == 'lite-mono-small':
+            self.num_ch_enc = np.array([48, 80, 128])
+            self.depth = [4, 4, 7]
+            self.dims = [48, 80, 128]
+            if height == 192 and width == 640:
+                self.dilation = [[1, 2, 3], [1, 2, 3], [1, 2, 3, 2, 4, 6]]
+            elif height == 320 and width == 1024:
+                self.dilation = [[1, 2, 5], [1, 2, 5], [1, 2, 5, 2, 4, 10]]
+
+        elif model == 'lite-mono-tiny':
+            self.num_ch_enc = np.array([32, 64, 128])
+            self.depth = [4, 4, 7]
+            self.dims = [32, 64, 128]
+            if height == 192 and width == 640:
+                self.dilation = [[1, 2, 3], [1, 2, 3], [1, 2, 3, 2, 4, 6]]
+            elif height == 320 and width == 1024:
+                self.dilation = [[1, 2, 5], [1, 2, 5], [1, 2, 5, 2, 4, 10]]
+
+        elif model == 'lite-mono-8m':
+            self.num_ch_enc = np.array([64, 128, 224])
+            self.depth = [4, 4, 10]
+            self.dims = [64, 128, 224]
+            if height == 192 and width == 640:
+                self.dilation = [[1, 2, 3], [1, 2, 3], [1, 2, 3, 1, 2, 3, 2, 4, 6]]
+            elif height == 320 and width == 1024:
+                self.dilation = [[1, 2, 3], [1, 2, 3], [1, 2, 3, 1, 2, 3, 2, 4, 6]]
 
         for g in global_block_type:
             assert g in ['None', 'LGFI']
@@ -204,18 +358,15 @@ class LiteMono(nn.Module):
         for i in range(1, 5):
             self.input_downsample.append(AvgPool(i))
 
-        # for i in range(2):
         for i in range(2):
             downsample_layer = nn.Sequential(
                 Conv(self.dims[i]*2+3, self.dims[i+1], kSize=3, stride=2, padding=1, bn_act=False),
             )
             self.downsample_layers.append(downsample_layer)
 
-        # ------------------------------ Stage 시작 ------------------------------ 
         self.stages = nn.ModuleList()
         dp_rates = [x.item() for x in torch.linspace(0, drop_path_rate, sum(self.depth))]
         cur = 0
-        # for i in range(3):
         for i in range(3):
             stage_blocks = []
             for j in range(self.depth[i]):
@@ -258,7 +409,7 @@ class LiteMono(nn.Module):
         x_down = []
         for i in range(4):
             x_down.append(self.input_downsample[i](x))
-        
+
         tmp_x = []
         x = self.downsample_layers[0](x)
         x = self.stem2(torch.cat((x, x_down[0]), dim=1))
@@ -282,7 +433,7 @@ class LiteMono(nn.Module):
             tmp_x.append(x)
 
             features.append(x)
-        
+
         return features
 
     def forward(self, x):

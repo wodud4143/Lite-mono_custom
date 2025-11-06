@@ -164,6 +164,6 @@ if __name__ == "__main__":
 
     exp_dir = osp.join(osp.dirname(__file__), "experiments\logs")
     
-    enc_model_path = r"C:\Users\wodud\OneDrive\Desktop\Lite-mono_custom\experiments\logs\best_star\models\weights_19\encoder.pth"
-    dec_model_path = r"C:\Users\wodud\OneDrive\Desktop\Lite-mono_custom\experiments\logs\best_star\models\weights_19\depth.pth"
+    enc_model_path = r"C:\Users\wodud\OneDrive\Desktop\Lite-mono_custom\experiments\logs\best_half_cutout\models\weights_92\encoder.pth"
+    dec_model_path = r"C:\Users\wodud\OneDrive\Desktop\Lite-mono_custom\experiments\logs\best_half_cutout\models\weights_92\depth.pth"
     main()
