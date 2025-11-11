@@ -30,7 +30,7 @@ class LiteMono(nn.Module):
         self.asym_dims = [32, 64, 128]
 
         if height == 192 and width == 640:
-            self.dilation = [[1, 2], [1, 2], [2, 3, 5]] # 다일레이션 수정
+            self.dilation = [[1, 3], [1, 2], [2, 3, 6]] # Stage 0 dilation 최적화: [1,2] → [1,3], Stage 2 마지막 블록: 5 → 6 (receptive field 확대, Latency 영향 최소)
             
         for g in global_block_type:
             assert g in ['None', 'LGFI']
@@ -144,14 +144,8 @@ class LiteMono(nn.Module):
         
         """(32, 96, 320)"""                                                  
         if self.gamma_24 is not None:
-            x_down2 = x_down2.permute(0, 2, 3, 1)
-            x_down2 = self.gamma_24 * x_down2
-            x_down2 = x_down2.permute(0, 3, 1, 2)
+            x_down2 = self.gamma_24.view(1, -1, 1, 1) * x_down2
             ds2 = torch.add(ds2, x_down2)
-        
-        # if self.gamma_24 is not None:
-        #     x_down2 = self.gamma_24.view(1, -1, 1, 1) * x_down2
-        #     ds2 = torch.add(ds2, x_down2)
 
         
         """(32, 48, 160)"""
@@ -166,19 +160,13 @@ class LiteMono(nn.Module):
         
         """(32, 48, 160)"""
         if self.gamma_24 is not None:
-            x_down4 = x_down4.permute(0, 2, 3, 1)
-            x_down4 = self.gamma_24 * x_down4
-            x_down4 = x_down4.permute(0, 3, 1, 2)
-            add_ds4 = torch.add(ds4, x_down4)  
-        
-        # if self.gamma_24 is not None:
-        #     x_down4 = self.gamma_24.view(1, -1, 1, 1) * x_down4
-        #     add_ds4 = torch.add(ds4, x_down4)
+            x_down4 = self.gamma_24.view(1, -1, 1, 1) * x_down4
+            add_ds4 = torch.add(ds4, x_down4)
         
         
         """(64, 24, 80)"""
         ds8 = self.add_ds_conv_64(add_ds4) # StandardConv(stride = 2) 34,64
-        
+        ds8 = self.cghost2_layer(ds8) # Depth-specific optimization for Stage 1
         
         """(64, 24, 80)"""
         for s in range(len(self.stages[1])-1):
@@ -188,14 +176,8 @@ class LiteMono(nn.Module):
         
         """(64, 24, 80)"""
         if self.gamma_8 is not None:
-            x_down8 = x_down8.permute(0, 2, 3, 1)
-            x_down8 = self.gamma_8 * x_down8
-            x_down8 = x_down8.permute(0, 3, 1, 2)
+            x_down8 = self.gamma_8.view(1, -1, 1, 1) * x_down8
             add_ds8 = torch.add(ds8, x_down8)
-        
-        # if self.gamma_24 is not None:
-        #     x_down8 = self.gamma_8.view(1, -1, 1, 1) * x_down8
-        #     add_ds8 = torch.add(ds8, x_down8)
         
         
         

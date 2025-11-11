@@ -55,8 +55,6 @@ class MonoDataset(data.Dataset):
         self.is_train = is_train
         self.img_ext = img_ext
 
-        self.original_w, self.original_h = 1242, 375
-        
         self.loader = pil_loader
         self.to_tensor = transforms.ToTensor()
 
@@ -83,29 +81,6 @@ class MonoDataset(data.Dataset):
                                                interpolation=self.interp)
 
         self.load_depth = self.check_depth()
-        
-    def apply_cutout(self, img, n_holes=1, length=100):
-        img = img.copy()
-        draw = ImageDraw.Draw(img)
-        h, w = img.size[1], img.size[0]
-        
-        # 이미지의 아래쪽 절반 영역만 사용
-        h_start = h // 2  
-        
-        for _ in range(n_holes):
-            # y 좌표는 h_start부터 h까지의 범위에서만 선택
-            # y = random.randint(h_start, h)
-            y = random.randint(h_start + length // 2, h - length // 2)
-            x = random.randint(0, w)
-            
-            y1 = max(h_start, y - length // 2)  # 최소값을 h_start로 제한
-            y2 = min(h, y + length // 2)
-            x1 = max(0, x - length // 2)
-            x2 = min(w, x + length // 2)
-            
-            draw.rectangle([x1, y1, x2, y2], fill=(0, 0, 0))
-        
-        return img
 
     def preprocess(self, inputs, color_aug):
         """Resize colour images to the required scales and augment if required
@@ -120,32 +95,13 @@ class MonoDataset(data.Dataset):
                 n, im, i = k
                 for i in range(self.num_scales):
                     inputs[(n, im, i)] = self.resize[i](inputs[(n, im, i - 1)])
-            elif "color_cutout" in k:
-                n, im, i = k
-                for i in range(self.num_scales):
-                    inputs[(n, im, i)] = self.resize[i](inputs[(n, im, i - 1)])
-                    
-                    
+
         for k in list(inputs):
             f = inputs[k]
             if "color" in k:
                 n, im, i = k
-                if n == "color":
-                    inputs[(n, im, i)] = self.to_tensor(f) # cutout 적용 X
-                    
-            elif "color_cutout" in k:  
-                n, im, i = k    
-                if n == "color_cutout": 
-                    inputs[("color_aug", im, i)] = self.to_tensor(color_aug(f)) # cutout 적용 O
-                    
-                    
-
-        # for k in list(inputs):
-        #     f = inputs[k]
-        #     if "color" in k:
-        #         n, im, i = k
-        #         inputs[(n, im, i)] = self.to_tensor(f)
-        #         inputs[(n + "_aug", im, i)] = self.to_tensor(color_aug(f))
+                inputs[(n, im, i)] = self.to_tensor(f)
+                inputs[(n + "_aug", im, i)] = self.to_tensor(color_aug(f))
         
 
     def __len__(self):
@@ -179,7 +135,8 @@ class MonoDataset(data.Dataset):
 
         do_color_aug = self.is_train and random.random() > 0.5
         do_flip = self.is_train and random.random() > 0.5
-        do_cutout = self.is_train and random.random() > 0.5
+        do_tr_aug = self.is_train and random.random() > 0.5
+        do_crop = self.is_train and random.random() > 0.5
 
 
         line = self.filenames[index].split()
@@ -195,67 +152,41 @@ class MonoDataset(data.Dataset):
         else:
             side = None
 
-
-        
-        
-        x = random.randint(int(self.original_w*0.05), self.original_w - self.width)
-        y = random.randint(int(self.original_h*0.05), self.original_h - self.height)
-        crop_params = (x, y, x+self.width, y+self.height)
-
-            
-            
-        if do_cutout:
-            # Cutout parameters: 1-3 holes, size 50-150 pixels
-            cutout_params = {
-                'n_holes': 1,
-                'length': random.randint(25, 50)
-            }
+        if do_crop:
+            # 원본 크기의 85-95% 정도로 크롭
+            original_w, original_h = 1242, 375  
+            crop_ratio = random.uniform(0.85, 0.95)
+            crop_w = int(original_w * crop_ratio)
+            crop_h = int(original_h * crop_ratio)
+            crop_x = random.randint(0, original_w - crop_w)
+            crop_y = random.randint(0, original_h - crop_h)
+            crop_params = (crop_x, crop_y, crop_w, crop_h)
         else:
-            cutout_params = None
-            
+            crop_params = None
 
-        # region 오리지널 컷아웃 제거
+        if do_tr_aug:
+            tr_params = (random.uniform(-0.1, 0.1), random.uniform(-0.1, 0.1))  # 10%로 줄임
+        else:
+            tr_params = (0, 0)
+
         for i in self.frame_idxs:
             if i == "s":
                 other_side = {"r": "l", "l": "r"}[side]
-                color_original, color_with_cutout  = self.get_color(folder, frame_index, other_side, do_flip, crop_params, do_cutout, cutout_params)
-                inputs[("color", i, -1)] = color_original
-                inputs[("color_cutout", i, -1)] = color_with_cutout
 
+                inputs[("color", i, -1)] = self.get_color(folder, frame_index, other_side, do_flip, do_tr_aug, tr_params, do_crop, crop_params)
+    
             else:
-                color_original, color_with_cutout = self.get_color(folder, frame_index + i, side, do_flip, crop_params, do_cutout, cutout_params)
-                inputs[("color", i, -1)] = color_original
-                inputs[("color_cutout", i, -1)] = color_with_cutout
-
+                inputs[("color", i, -1)] = self.get_color(folder, frame_index + i, side, do_flip, do_tr_aug, tr_params, do_crop, crop_params)
 
         # adjusting intrinsics to match each scale in the pyramid
         for scale in range(self.num_scales):
             K = self.K.copy()
-            
-            # 크롭 파라미터 언패킹
-            crop_x1, crop_y1, crop_x2, crop_y2 = crop_params
-            crop_width = crop_x2 - crop_x1   # 실제 크롭 너비
-            crop_height = crop_y2 - crop_y1  # 실제 크롭 높이
-            
-            # Principal point 이동 (normalized 좌표)
-            K[0, 2] = K[0, 2] - (crop_x1 / self.original_w)
-            K[1, 2] = K[1, 2] - (crop_y1 / self.original_h)
-            
-            # Focal length와 principal point 스케일 조정
-            # 크롭 후 원본 크기로 리사이즈하므로
-            scale_x = self.original_w / crop_width
-            scale_y = self.original_h / crop_height
-            
-            K[0, 0] *= scale_x
-            K[1, 1] *= scale_y
-            K[0, 2] *= scale_x
-            K[1, 2] *= scale_y
-            
-            # 타겟 해상도로 스케일링
+
             K[0, :] *= self.width // (2 ** scale)
             K[1, :] *= self.height // (2 ** scale)
 
             inv_K = np.linalg.pinv(K)
+
             inputs[("K", scale)] = torch.from_numpy(K)
             inputs[("inv_K", scale)] = torch.from_numpy(inv_K)
 
@@ -271,10 +202,6 @@ class MonoDataset(data.Dataset):
         for i in self.frame_idxs:
             del inputs[("color", i, -1)]
             del inputs[("color_aug", i, -1)]
-            del inputs[("color_cutout", i, -1)] #add
-            for scale in range(self.num_scales):
-                if ("color_cutout", i, scale) in inputs:
-                    del inputs[("color_cutout", i, scale)]
 
         if self.load_depth:
             depth_gt = self.get_depth(folder, frame_index, side, do_flip)
@@ -291,10 +218,8 @@ class MonoDataset(data.Dataset):
 
         return inputs
 
-    
-    def get_color(self, folder, frame_index, side, do_flip,crop_params, do_cutout, cutout_params):
+    def get_color(self, folder, frame_index, side, do_flip, do_tr_aug, tr_params,do_crop,crop_params):
         raise NotImplementedError
-    
 
     def check_depth(self):
         raise NotImplementedError

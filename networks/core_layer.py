@@ -399,57 +399,126 @@ class AsymDilatedConv(nn.Module):
 # region - [Ghost]
 
 class CustomGhostModule(nn.Module):
-    def __init__(self, inc, outc = None, exp=2):
+    """
+    Depth-specific optimized Ghost Module for monocular depth estimation
+    - Adaptive multi-scale dilation for better receptive field
+    - Vertical structure emphasis for thin objects (poles, traffic lights)
+    - Depth-aware channel attention
+    - Spatial-aware fusion for close objects
+    """
+    def __init__(self, inc, outc=None, exp=2, use_depth_opt=True):
         super().__init__()
-
+        
+        self.use_depth_opt = use_depth_opt
         self.midc = inc * 2
         c_half = self.midc // 2
         
-
+        # Expansion
         self.expand_pw = nn.Conv2d(inc, inc * exp, kernel_size=1, bias=False)
-        self.expand_bn = nn.BatchNorm2d(self.midc,eps=1e-3, momentum=0.999)
+        self.expand_bn = nn.BatchNorm2d(self.midc, eps=1e-3, momentum=0.999)
         
-        self.reduce_pw = nn.Conv2d(c_half, inc, kernel_size=1, bias=False)
-        self.reduce_bn = nn.BatchNorm2d(inc ,eps=1e-3, momentum=0.999)
-        
+        # Split into two branches
         self.conv1x1 = nn.Conv2d(inc * exp, c_half, kernel_size=1, bias=False)
-
-        self.ex_conv = nn.Conv2d(c_half, c_half, kernel_size=3, padding=1, bias=False)
-        self.ex_bn = nn.BatchNorm2d(c_half,eps=1e-3, momentum=0.999)
         
-        self.ch_conv = nn.Conv2d(c_half, c_half, kernel_size=3, padding=2, dilation=2, bias=False)
-        self.ch_bn = nn.BatchNorm2d(c_half,eps=1e-3, momentum=0.999)
-        # self.act = nn.GELU()
+        # Branch 1: Local features (standard conv)
+        self.ex_conv = nn.Conv2d(c_half, c_half, kernel_size=3, padding=1, bias=False)
+        self.ex_bn = nn.BatchNorm2d(c_half, eps=1e-3, momentum=0.999)
+        
+        # Branch 2: Multi-scale dilated features (depth-specific)
+        if use_depth_opt:
+            # Multi-scale dilation for better receptive field
+            self.ch_conv_d1 = nn.Conv2d(c_half, c_half // 2, kernel_size=3, padding=1, dilation=1, bias=False)
+            self.ch_conv_d2 = nn.Conv2d(c_half, c_half // 2, kernel_size=3, padding=2, dilation=2, bias=False)
+            self.ch_bn_d1 = nn.BatchNorm2d(c_half // 2, eps=1e-3, momentum=0.999)
+            self.ch_bn_d2 = nn.BatchNorm2d(c_half // 2, eps=1e-3, momentum=0.999)
+            
+            # Vertical structure emphasis (1x5 conv for vertical objects)
+            self.vertical_conv = nn.Conv2d(c_half, c_half // 4, kernel_size=(1, 5), padding=(0, 2), bias=False)
+            self.vertical_bn = nn.BatchNorm2d(c_half // 4, eps=1e-3, momentum=0.999)
+            
+            # Projection layer: concatenate된 채널을 c_half로 맞춤
+            # c_half // 2 + c_half // 2 + c_half // 4 = 5 * c_half // 4
+            concat_channels = c_half // 2 + c_half // 2 + c_half // 4  # 5 * c_half // 4
+            self.concat_proj = nn.Conv2d(concat_channels, c_half, kernel_size=1, bias=False)
+            self.concat_bn = nn.BatchNorm2d(c_half, eps=1e-3, momentum=0.999)
+            
+            # Depth-aware channel attention
+            self.depth_attention = nn.Sequential(
+                nn.AdaptiveAvgPool2d(1),
+                nn.Conv2d(c_half, c_half // 4, 1, bias=False),
+                nn.ReLU6(inplace=True),
+                nn.Conv2d(c_half // 4, c_half, 1, bias=False),
+                nn.Sigmoid()
+            )
+        else:
+            # Original single dilation
+            self.ch_conv = nn.Conv2d(c_half, c_half, kernel_size=3, padding=2, dilation=2, bias=False)
+            self.ch_bn = nn.BatchNorm2d(c_half, eps=1e-3, momentum=0.999)
+        
+        # Reduction
+        self.reduce_pw = nn.Conv2d(c_half, inc, kernel_size=1, bias=False)
+        self.reduce_bn = nn.BatchNorm2d(inc, eps=1e-3, momentum=0.999)
+        
         self.act = nn.ReLU6()
    
-        
     def forward(self, x):
         identity = x
-
+        
+        # Expansion
         x = self.expand_pw(x)
         x = self.expand_bn(x)
         x = self.act(x)
         
-        # x1, x2 = torch.chunk(x, 2, dim=1)
+        # Split into two branches
+        x1 = self.conv1x1(x)  # Branch 1: Local features
+        x2 = self.conv1x1(x)  # Branch 2: Multi-scale features
         
-        x1 = self.conv1x1(x)
-        x2 = self.conv1x1(x)
-        
+        # Branch 1: Local features (standard 3x3 conv)
         x1 = self.ex_conv(x1)
         x1 = self.ex_bn(x1)
         x1 = self.act(x1)
         
-        x2 = self.ch_conv(x2)
-        x2 = self.ch_bn(x2)
-        x2 = self.act(x2)
+        # Branch 2: Depth-specific multi-scale features
+        if self.use_depth_opt:
+            # Multi-scale dilated convolutions
+            x2_d1 = self.ch_conv_d1(x2)
+            x2_d1 = self.ch_bn_d1(x2_d1)
+            x2_d1 = self.act(x2_d1)
+            
+            x2_d2 = self.ch_conv_d2(x2)
+            x2_d2 = self.ch_bn_d2(x2_d2)
+            x2_d2 = self.act(x2_d2)
+            
+            # Vertical structure emphasis (for poles, traffic lights)
+            x2_vert = self.vertical_conv(x2)
+            x2_vert = self.vertical_bn(x2_vert)
+            x2_vert = self.act(x2_vert)
+            
+            # Concatenate multi-scale features
+            x2 = torch.cat([x2_d1, x2_d2, x2_vert], dim=1)  # c_half // 2 + c_half // 2 + c_half // 4 = 5 * c_half // 4
+            
+            # Projection to c_half channels
+            x2 = self.concat_proj(x2)
+            x2 = self.concat_bn(x2)
+            x2 = self.act(x2)
+            
+            # Depth-aware channel attention
+            attn = self.depth_attention(x2)
+            x2 = x2 * attn
+        else:
+            # Original single dilation
+            x2 = self.ch_conv(x2)
+            x2 = self.ch_bn(x2)
+            x2 = self.act(x2)
         
-        # x = torch.cat([x1, x2], dim=1)
+        # Feature fusion: element-wise multiplication
+        x = x1 * x2
         
-        x = x1 * x2 
-        
+        # Reduction
         x = self.reduce_pw(x)
         x = self.reduce_bn(x)
         
+        # Residual connection
         x = x + identity
         return x
 

@@ -38,33 +38,55 @@ class KITTIDataset(MonoDataset):
             "velodyne_points/data/{:010d}.bin".format(int(frame_index)))
 
         return os.path.isfile(velo_filename)
-#region Get_color
-    def get_color(self, folder, frame_index, side, do_flip, crop_params, do_cutout, cutout_params):
+
+    def get_color(self, folder, frame_index, side, do_flip, do_crop, crop_params,
+                  do_scale_aug, scale_factor, do_translation_aug, translation_x, translation_y):
         color = self.loader(self.get_image_path(folder, frame_index, side))
 
         if do_flip:
             color = color.transpose(pil.FLIP_LEFT_RIGHT)
-
-        # crop_x, crop_y, crop_w, crop_h = crop_params
-        # color = color.crop((crop_x, crop_y, crop_x + crop_w, crop_y + crop_h))
-        # color = color.resize(self.full_res_shape, pil.LANCZOS)
-        
-        crop_x1, crop_y1, crop_x2, crop_y2 = crop_params
-        color = color.crop((crop_x1, crop_y1, crop_x2, crop_y2))  # ✅ 올바름
-
             
-         
-        if do_cutout and cutout_params is not None:
-            # Cutout 적용
-            color_with_cutout = self.apply_cutout(color, 
-                                    n_holes=cutout_params['n_holes'], 
-                                    length=cutout_params['length'])
-        else: color_with_cutout = color
-
         
-        
-        return color, color_with_cutout
 
+        if do_crop and crop_params is not None:
+            # 랜덤 크롭
+            crop_x, crop_y, crop_w, crop_h = crop_params
+            color = color.crop((crop_x, crop_y, crop_x + crop_w, crop_y + crop_h))
+        
+        # Scale augmentation: PIL Image resize (개선 2)
+        if do_scale_aug and scale_factor != 1.0:
+            w, h = color.size
+            new_w = int(w * scale_factor)
+            new_h = int(h * scale_factor)
+            color = color.resize((new_w, new_h), pil.LANCZOS)
+            # Resize 후 원래 크기로 복원 (crop 또는 padding)
+            if scale_factor > 1.0:
+                # Scale up: center crop
+                left = (new_w - w) // 2
+                top = (new_h - h) // 2
+                color = color.crop((left, top, left + w, top + h))
+            else:
+                # Scale down: padding
+                new_color = pil.new('RGB', (w, h), (0, 0, 0))
+                left = (w - new_w) // 2
+                top = (h - new_h) // 2
+                new_color.paste(color, (left, top))
+                color = new_color
+        
+        # Translation augmentation: PIL Image transform (개선 4)
+        if do_translation_aug and (translation_x != 0.0 or translation_y != 0.0):
+            w, h = color.size
+            tx = int(translation_x * w)
+            ty = int(translation_y * h)
+            # Affine transformation matrix: [1, 0, tx, 0, 1, ty]
+            color = color.transform(
+                color.size,
+                pil.AFFINE,
+                (1, 0, tx, 0, 1, ty),
+                fill=(0, 0, 0)
+            )
+        
+        return color
 
 
 class KITTIRAWDataset(KITTIDataset):

@@ -34,7 +34,7 @@ def parse_args():
 
     parser.add_argument('--model_name', type=str,
                         help='model name for path construction',
-                        default='v4_3_R_aug3_gamma'
+                        default='half_cutout_150'
                         )
 
     parser.add_argument('--test',
@@ -244,7 +244,7 @@ def test_simple(args,epoch,modelname):
 
 def direct():
 
-    directory = r"C:\Users\wodud\OneDrive\Desktop\도로주행 데이터\bestmodel_200" 
+    directory = r"C:\Users\wodud\OneDrive\Desktop\도로주행 데이터\change_loss_v2" 
 
     folders = [os.path.join(directory, f) for f in os.listdir(directory) if os.path.isdir(os.path.join(directory, f))]
 
@@ -256,8 +256,8 @@ def direct():
 
 
 if __name__ == '__main__':
-    modelname = "bestmodel"
-    epoch = 199
+    modelname = "change_loss_v2"
+    epoch = 32
     args = parse_args()
     test_simple(args,epoch=epoch, modelname=modelname)
 

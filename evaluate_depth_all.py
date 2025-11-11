@@ -72,16 +72,15 @@ def batch_post_process_disparity(l_disp, r_disp):
     return r_mask * l_disp + l_mask * r_disp + (1.0 - l_mask - r_mask) * m_disp
 
 
-def evaluate(opt,weight_path=None):
+def evaluate(opt, weight_path=None):
     """Evaluates a pretrained model using a specified test set
     """
     MIN_DEPTH = 1e-3
     MAX_DEPTH = 80
 
-
-    # if weight_path is not None:
-    #     opt.load_weights_folder = weight_path
-        
+    # 결과를 저장할 리스트
+    all_results = []
+    
     for opt.load_weights_folder in weight_path:
     
         if opt.ext_disp_to_eval is None:
@@ -220,19 +219,87 @@ def evaluate(opt,weight_path=None):
 
         mean_errors = np.array(errors).mean(0)
 
-        if weight_path is not None:
-            path = Path(opt.load_weights_folder)
-            filename = path.name
-            print(filename + "\n")
+        path = Path(opt.load_weights_folder)
+        filename = path.name
         
+        # 결과 저장
+        result = {
+            'epoch': filename,
+            'folder_path': opt.load_weights_folder,
+            'abs_rel': mean_errors[0],
+            'sq_rel': mean_errors[1],
+            'rmse': mean_errors[2],
+            'rmse_log': mean_errors[3],
+            'a1': mean_errors[4],
+            'a2': mean_errors[5],
+            'a3': mean_errors[6],
+            'flops': flops,
+            'params': params,
+            'flops_e': flops_e,
+            'params_e': params_e,
+            'flops_d': flops_d,
+            'params_d': params_d
+        }
+        all_results.append(result)
+        
+        print(filename + "\n")
         print("\n  " + ("{:>8} | " * 7).format("abs_rel", "sq_rel", "rmse", "rmse_log", "a1", "a2", "a3"))
         print(("&{: 8.3f}  " * 7).format(*mean_errors.tolist()) + "\\\\")
         print("\n  " + ("flops: {0}, params: {1}, flops_e: {2}, params_e:{3}, flops_d:{4}, params_d:{5}").format(flops, params, flops_e, params_e, flops_d, params_d))
         print("\n-> Done!")
 
-        # return mean_errors
-def direct():
+    # 최고 성능 에폭 찾기
+    print("\n" + "="*80)
+    print("최고 성능 에폭 분석")
+    print("="*80)
+    
+    # abs_rel 기준 최고
+    best_abs_rel = min(all_results, key=lambda x: x['abs_rel'])
+    print("\n[abs_rel 최고] Epoch: {}".format(best_abs_rel['epoch']))
+    print("  " + ("{:>8} | " * 7).format("abs_rel", "sq_rel", "rmse", "rmse_log", "a1", "a2", "a3"))
+    print(("&{: 8.3f}  " * 7).format(
+        best_abs_rel['abs_rel'], best_abs_rel['sq_rel'], best_abs_rel['rmse'],
+        best_abs_rel['rmse_log'], best_abs_rel['a1'], best_abs_rel['a2'], best_abs_rel['a3']
+    ) + "\\\\")
+    
+    # sq_rel 기준 최고
+    best_sq_rel = min(all_results, key=lambda x: x['sq_rel'])
+    print("\n[sq_rel 최고] Epoch: {}".format(best_sq_rel['epoch']))
+    print("  " + ("{:>8} | " * 7).format("abs_rel", "sq_rel", "rmse", "rmse_log", "a1", "a2", "a3"))
+    print(("&{: 8.3f}  " * 7).format(
+        best_sq_rel['abs_rel'], best_sq_rel['sq_rel'], best_sq_rel['rmse'],
+        best_sq_rel['rmse_log'], best_sq_rel['a1'], best_sq_rel['a2'], best_sq_rel['a3']
+    ) + "\\\\")
+    
+    # rmse_log 기준 최고
+    best_rmse_log = min(all_results, key=lambda x: x['rmse_log'])
+    print("\n[rmse_log 최고] Epoch: {}".format(best_rmse_log['epoch']))
+    print("  " + ("{:>8} | " * 7).format("abs_rel", "sq_rel", "rmse", "rmse_log", "a1", "a2", "a3"))
+    print(("&{: 8.3f}  " * 7).format(
+        best_rmse_log['abs_rel'], best_rmse_log['sq_rel'], best_rmse_log['rmse'],
+        best_rmse_log['rmse_log'], best_rmse_log['a1'], best_rmse_log['a2'], best_rmse_log['a3']
+    ) + "\\\\")
+    
+    # 종합 최고 (abs_rel + sq_rel + rmse_log의 합이 가장 작은 것)
+    best_combined = min(all_results, key=lambda x: x['abs_rel'] + x['sq_rel'] + x['rmse_log'])
+    print("\n" + "="*80)
+    print("[종합 최고 성능] Epoch: {}".format(best_combined['epoch']))
+    print("(abs_rel + sq_rel + rmse_log 합: {:.6f})".format(
+        best_combined['abs_rel'] + best_combined['sq_rel'] + best_combined['rmse_log']))
+    print("="*80)
+    print("  " + ("{:>8} | " * 7).format("abs_rel", "sq_rel", "rmse", "rmse_log", "a1", "a2", "a3"))
+    print(("&{: 8.3f}  " * 7).format(
+        best_combined['abs_rel'], best_combined['sq_rel'], best_combined['rmse'],
+        best_combined['rmse_log'], best_combined['a1'], best_combined['a2'], best_combined['a3']
+    ) + "\\\\")
+    print("  " + ("flops: {0}, params: {1}, flops_e: {2}, params_e:{3}, flops_d:{4}, params_d:{5}").format(
+        best_combined['flops'], best_combined['params'], best_combined['flops_e'],
+        best_combined['params_e'], best_combined['flops_d'], best_combined['params_d']))
+    print("  Folder: {}".format(best_combined['folder_path']))
+    print("="*80)
 
+
+def direct():
     directory = r"C:\Users\wodud\OneDrive\Desktop\Lite-mono_custom\experiments\logs\lite_mono_scratch\models" 
 
     folders = [os.path.join(directory, f) for f in os.listdir(directory) if os.path.isdir(os.path.join(directory, f))]
@@ -243,8 +310,8 @@ def direct():
     
     return folders
 
+
 if __name__ == "__main__":
     options = LiteMonoOptions()
     weightPath = direct()
-    evaluate(options.parse(),weightPath)
-    
+    evaluate(options.parse(), weightPath)

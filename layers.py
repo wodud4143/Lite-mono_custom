@@ -231,6 +231,7 @@ def upsample(x, scale_factor=2, mode="bilinear"):
 def get_smooth_loss(disp, img):
     """Computes the smoothness loss for a disparity image
     The color image is used for edge-aware smoothness
+    Edge-aware: 세로 구조물(가로등, 신호등 등)의 경계를 보존하기 위해 수직 방향 edge에 더 높은 가중치
     """
     grad_disp_x = torch.abs(disp[:, :, :, :-1] - disp[:, :, :, 1:])
     grad_disp_y = torch.abs(disp[:, :, :-1, :] - disp[:, :, 1:, :])
@@ -238,8 +239,16 @@ def get_smooth_loss(disp, img):
     grad_img_x = torch.mean(torch.abs(img[:, :, :, :-1] - img[:, :, :, 1:]), 1, keepdim=True)
     grad_img_y = torch.mean(torch.abs(img[:, :, :-1, :] - img[:, :, 1:, :]), 1, keepdim=True)
 
+    # 기존 edge-aware weighting
     grad_disp_x *= torch.exp(-grad_img_x)
     grad_disp_y *= torch.exp(-grad_img_y)
+    
+    # 세로 구조물 경계 보존: 수직 방향 edge가 강한 영역에서 수직 smoothness loss 감소
+    # 수직 edge가 강한 영역(세로 구조물)에서는 수직 방향의 disparity 변화를 허용
+    vertical_edge_strength = grad_img_y
+    # 수직 edge가 강한 곳에서 수직 smoothness loss를 줄임 (0.3~1.0 범위)
+    vertical_edge_weight = 0.3 + 0.7 * torch.exp(-vertical_edge_strength * 2.0)
+    grad_disp_y = grad_disp_y * vertical_edge_weight
 
     return grad_disp_x.mean() + grad_disp_y.mean()
 
