@@ -1042,6 +1042,6 @@ if __name__ == "__main__":
     options = LiteMonoOptions()
     opts = options.parse()
     # 모델 이름과 가중치 경로를 직접 지정
-    model_name = "v4_3_R_aug3" 
-    weights_path = f"experiments/logs/{model_name}/models/weights_37"
+    model_name = "best_half_cutout_two_hole" 
+    weights_path = f"experiments/logs/{model_name}/models/weights_61"
     evaluate(opts, weights_path, model_name)

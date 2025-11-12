@@ -63,7 +63,7 @@ class MonoDataset(data.Dataset):
         try:
             # self.brightness = (0.8, 1.2)
             self.brightness = (0.8, 1.5)
-            self.contrast = (0.7, 1.3)  # Contrast 강화: edge detection 향상 (개선 5)
+            self.contrast = (0.8, 1.2)
             self.saturation = (0.8, 1.2)
             self.hue = (-0.1, 0.1)
             transforms.ColorJitter.get_params(
@@ -118,14 +118,32 @@ class MonoDataset(data.Dataset):
                 n, im, i = k
                 for i in range(self.num_scales):
                     inputs[(n, im, i)] = self.resize[i](inputs[(n, im, i - 1)])
+            elif "color_cutout" in k:
+                n, im, i = k
+                for i in range(self.num_scales):
+                    inputs[(n, im, i)] = self.resize[i](inputs[(n, im, i - 1)])
+                    
                     
         for k in list(inputs):
             f = inputs[k]
             if "color" in k:
                 n, im, i = k
                 if n == "color":
-                    inputs[(n, im, i)] = self.to_tensor(f)
-                    inputs[("color_aug", im, i)] = self.to_tensor(color_aug(f))
+                    inputs[(n, im, i)] = self.to_tensor(f) # cutout 적용 X
+                    
+            elif "color_cutout" in k:  
+                n, im, i = k    
+                if n == "color_cutout": 
+                    inputs[("color_aug", im, i)] = self.to_tensor(color_aug(f)) # cutout 적용 O
+                    
+                    
+
+        # for k in list(inputs):
+        #     f = inputs[k]
+        #     if "color" in k:
+        #         n, im, i = k
+        #         inputs[(n, im, i)] = self.to_tensor(f)
+        #         inputs[(n + "_aug", im, i)] = self.to_tensor(color_aug(f))
         
 
     def __len__(self):
@@ -157,13 +175,11 @@ class MonoDataset(data.Dataset):
         """
         inputs = {}
 
-        do_color_aug = self.is_train and random.random() > 0.3  # 50% → 70% (개선 5)
+        do_color_aug = self.is_train and random.random() > 0.5
         do_flip = self.is_train and random.random() > 0.5
-        do_scale_aug = self.is_train and random.random() > 0.5  # Scale augmentation (개선 2)
-        do_translation_aug = self.is_train and random.random() > 0.5  # Translation augmentation (개선 4)
+        # do_tr_aug = self.is_train and random.random() > 0.5
         do_crop = self.is_train and random.random() > 0.5
-        # Cutout 제거: 시간 일관성 문제로 인해 제거 (개선 1)
-        do_cutout = False
+        do_cutout = self.is_train and random.random() > 0.5
 
 
         line = self.filenames[index].split()
@@ -180,34 +196,26 @@ class MonoDataset(data.Dataset):
             side = None
 
         if do_crop:
-            #85-95% 크롭, 하단 중심 크롭 (개선 3)
+            #85-95% 크롭
             original_w, original_h = 1242, 375  
             crop_ratio = random.uniform(0.85, 0.95)
             crop_w = int(original_w * crop_ratio)
             crop_h = int(original_h * crop_ratio)
             crop_x = random.randint(0, original_w - crop_w)
-            # 하단 중심 크롭: 하단 75% 영역에서만 선택 (가까운 객체 강화)
-            crop_y = random.randint(
-                max(0, original_h - crop_h - original_h // 4),  # 하단 75% 영역
-                original_h - crop_h
-            )
+            crop_y = random.randint(0, original_h - crop_h)
             crop_params = (crop_x, crop_y, crop_w, crop_h)
         else:
             crop_params = None
-        
-        # Scale augmentation parameters (모든 프레임에 동일하게 적용) (개선 2)
-        if do_scale_aug:
-            scale_factor = random.uniform(0.95, 1.05)  # 작은 범위로 시작
+            
+            
+        if do_cutout:
+            # Cutout parameters: 1-3 holes, size 50-150 pixels
+            cutout_params = {
+                'n_holes': 1,
+                'length': random.randint(25, 50)
+            }
         else:
-            scale_factor = 1.0
-        
-        # Translation augmentation parameters (모든 프레임에 동일하게 적용) (개선 4)
-        if do_translation_aug:
-            translation_x = random.uniform(-0.05, 0.05)  # 5% 범위
-            translation_y = random.uniform(-0.05, 0.05)
-        else:
-            translation_x = 0.0
-            translation_y = 0.0
+            cutout_params = None
             
         # if do_rotate:
         #     rot_angle =  random.choice([-1, 1]) * random.uniform(20, 25)
@@ -219,41 +227,28 @@ class MonoDataset(data.Dataset):
         # else:
         #     tr_params = (0, 0)
 
-        # 모든 프레임에 동일한 augmentation 적용 (시간 일관성 보장)
+        # region 오리지널 컷아웃 제거
         for i in self.frame_idxs:
             if i == "s":
                 other_side = {"r": "l", "l": "r"}[side]
-                # Scale과 Translation augmentation 적용 (모든 프레임에 동일) (개선 2, 4)
-                color = self.get_color(folder, frame_index, other_side, do_flip, do_crop, crop_params, 
-                                      do_scale_aug, scale_factor, do_translation_aug, translation_x, translation_y)
-                inputs[("color", i, -1)] = color
+                
+                color_original, color_with_cutout  = self.get_color(folder, frame_index, other_side, do_flip, do_crop, crop_params, do_cutout, cutout_params)
+                inputs[("color", i, -1)] = color_original
+                inputs[("color_cutout", i, -1)] = color_with_cutout
+                # inputs[("color", i, -1)] = self.get_color(folder, frame_index, other_side, do_flip, do_crop, crop_params, do_cutout, cutout_params)
+
             else:
-                # Scale과 Translation augmentation 적용 (모든 프레임에 동일) (개선 2, 4)
-                color = self.get_color(folder, frame_index + i, side, do_flip, do_crop, crop_params,
-                                      do_scale_aug, scale_factor, do_translation_aug, translation_x, translation_y)
-                inputs[("color", i, -1)] = color
+                color_original, color_with_cutout = self.get_color(folder, frame_index + i, side, do_flip, do_crop, crop_params, do_cutout, cutout_params)
+                inputs[("color", i, -1)] = color_original
+                inputs[("color_cutout", i, -1)] = color_with_cutout
+                # inputs[("color", i, -1)] = self.get_color(folder, frame_index + i, side, do_flip, do_crop, crop_params, do_cutout, cutout_params)
 
         # adjusting intrinsics to match each scale in the pyramid
-        # Geometry-preserving augmentation: Scale과 Translation에 대해 K 조정 (개선 2, 4)
         for scale in range(self.num_scales):
             K = self.K.copy()
 
-            # Multi-scale에 대한 기본 조정
             K[0, :] *= self.width // (2 ** scale)
             K[1, :] *= self.height // (2 ** scale)
-            
-            # Scale augmentation: Camera intrinsics 조정 (개선 2)
-            if do_scale_aug:
-                K[0, 0] *= scale_factor  # fx
-                K[1, 1] *= scale_factor  # fy
-                # Principal point 조정 (이미지 중심 기준)
-                K[0, 2] = (K[0, 2] - self.width // (2 ** scale) / 2) * scale_factor + self.width // (2 ** scale) / 2  # cx
-                K[1, 2] = (K[1, 2] - self.height // (2 ** scale) / 2) * scale_factor + self.height // (2 ** scale) / 2  # cy
-            
-            # Translation augmentation: Camera intrinsics 조정 (개선 4)
-            if do_translation_aug:
-                K[0, 2] += translation_x * self.width // (2 ** scale)  # cx
-                K[1, 2] += translation_y * self.height // (2 ** scale)  # cy
 
             inv_K = np.linalg.pinv(K)
 
@@ -272,6 +267,10 @@ class MonoDataset(data.Dataset):
         for i in self.frame_idxs:
             del inputs[("color", i, -1)]
             del inputs[("color_aug", i, -1)]
+            del inputs[("color_cutout", i, -1)] #add
+            for scale in range(self.num_scales):
+                if ("color_cutout", i, scale) in inputs:
+                    del inputs[("color_cutout", i, scale)]
 
         if self.load_depth:
             depth_gt = self.get_depth(folder, frame_index, side, do_flip)
@@ -289,8 +288,7 @@ class MonoDataset(data.Dataset):
         return inputs
 
     
-    def get_color(self, folder, frame_index, side, do_flip, do_crop, crop_params, 
-                  do_scale_aug, scale_factor, do_translation_aug, translation_x, translation_y):
+    def get_color(self, folder, frame_index, side, do_flip, do_crop,crop_params, do_cutout, cutout_params):
         raise NotImplementedError
     
 

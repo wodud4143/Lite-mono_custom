@@ -186,7 +186,7 @@ class Trainer:
                                      self.opt.frame_ids, 4, is_train=True, img_ext=img_ext)
         
         self.train_loader = DataLoader(train_dataset, self.opt.batch_size, True, 
-                                       num_workers=self.opt.num_workers, pin_memory=True, drop_last=True,prefetch_factor=3,persistent_workers=True) #prefetch_factor=2,persistent_workers=True
+                                       num_workers=self.opt.num_workers, pin_memory=True, drop_last=True,prefetch_factor=2,persistent_workers=False) #prefetch_factor=2,persistent_workers=True
         # ---------------------------------------------------------------
         
         # ------------------------ Validation ------------------------
@@ -194,7 +194,7 @@ class Trainer:
                                    self.opt.frame_ids, 4, is_train=False, img_ext=img_ext)
         
         self.val_loader = DataLoader(val_dataset, self.opt.batch_size, True,
-                                     num_workers=self.opt.num_workers, pin_memory=True, drop_last=True,prefetch_factor=3,persistent_workers=True) #prefetch_factor=2,persistent_workers=True
+                                     num_workers=self.opt.num_workers, pin_memory=True, drop_last=True,prefetch_factor=2,persistent_workers=False) #prefetch_factor=2,persistent_workers=True
         # ---------------------------------------------------------------
         self.val_iter = iter(self.val_loader)
 
@@ -528,7 +528,6 @@ class Trainer:
 
     def compute_reprojection_loss(self, pred, target):
         """Computes reprojection loss between a batch of predicted and target images
-        Spatial-weighted: 이미지 하단(3-4 사분면, 가까운 객체)에 높은 가중치 부여
         """
         abs_diff = torch.abs(target - pred)
         l1_loss = abs_diff.mean(1, True)
@@ -540,14 +539,7 @@ class Trainer:
             ssim_loss = self.ssim(pred, target).mean(1, True)
             reprojection_loss = 0.85 * ssim_loss + 0.15 * l1_loss
         
-        # Spatial-weighted loss: 이미지 하단(3-4 사분면)에 높은 가중치
-        # 이미지 높이의 하단 50%에 1.5배 가중치, 나머지에 1.0배 가중치
-        B, C, H, W = reprojection_loss.shape
-        spatial_weight = torch.ones_like(reprojection_loss)
-        bottom_half = H // 2
-        spatial_weight[:, :, bottom_half:, :] = 1.5  # 하단 50%에 1.5배 가중치
-        
-        reprojection_loss = reprojection_loss * spatial_weight
+
 
         return reprojection_loss
 
@@ -629,28 +621,13 @@ class Trainer:
                 outputs["identity_selection/{}".format(scale)] = (
                     idxs > identity_reprojection_loss.shape[1] - 1).float()
 
-            # Scale-aware loss: sq_rel에 직접 영향을 주는 loss 항
-            # 가까운 객체(작은 depth = 큰 disparity)에 더 높은 가중치
-            # sq_rel = mean((gt - pred)^2 / gt)이므로, 작은 depth 값에서 오차가 클수록 sq_rel이 커짐
-            # 따라서 가까운 객체(큰 disparity)에 더 높은 가중치를 부여
-            mean_disp = disp.mean(2, True).mean(3, True)
-            norm_disp = disp / (mean_disp + 1e-7)
-            
-            # to_optimise의 shape에 맞춰서 disparity를 평균화
-            B, H, W = to_optimise.shape
-            disp_for_weight = F.interpolate(norm_disp, size=(H, W), mode='bilinear', align_corners=False)
-            disp_for_weight = disp_for_weight.squeeze(1)  # [B, H, W]
-            
-            # disparity가 클수록(가까울수록) 가중치 증가
-            scale_aware_weight = 1.0 + 0.5 * (disp_for_weight / (disp_for_weight.mean() + 1e-7))
-            scale_aware_loss = (to_optimise * scale_aware_weight).mean() - to_optimise.mean()
-            loss += 0.1 * scale_aware_loss  # 0.1은 scale-aware loss의 가중치
-            
             loss += to_optimise.mean()
 
+            mean_disp = disp.mean(2, True).mean(3, True)
+            norm_disp = disp / (mean_disp + 1e-7)
             smooth_loss = get_smooth_loss(norm_disp, color)
+
             loss += self.opt.disparity_smoothness * smooth_loss / (2 ** scale)
-            
             total_loss += loss
             losses["loss/{}".format(scale)] = loss
 
@@ -868,4 +845,3 @@ class Trainer:
             self.model_pose_optimizer.load_state_dict(optimizer_pose_dict)
         else:
             print("Cannot find Adam weights so Adam is randomly initialized")
-

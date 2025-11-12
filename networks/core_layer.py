@@ -285,59 +285,59 @@ class DilatedConv(nn.Module):
 #         return x
 
 # region AsymDilatedConv_v2
-# class AsymDilatedConv_v2(nn.Module): 
-#     def __init__(self, inc, outc, kernel_size, drop_path=0.0, residual=False):
-#         super().__init__()
-#         self.residual = residual
-#         self.drop_path = DropPath(drop_path) if drop_path > 0 else nn.Identity()
-#         padding = kernel_size // 2
+class AsymDilatedConv_v2(nn.Module): 
+    def __init__(self, inc, kernel_size, drop_path=0.0, residual=False):
+        super().__init__()
+        self.residual = residual
+        self.drop_path = DropPath(drop_path) if drop_path > 0 else nn.Identity()
+        padding = kernel_size // 2
         
-#         # self.expansion_conv = nn.Conv2d(inc, outc, kernel_size=1)
-#         self.conv5x5 = nn.Conv2d(inc // 4, inc // 4, 
-#                                  kernel_size=kernel_size,
-#                                  padding=padding
-#                                  )
-#         self.conv1x5 = nn.Conv2d(inc // 4, inc // 4, 
-#                                  kernel_size=(1, kernel_size),
-#                                  padding=(0, padding)
-#                                  )
-#         self.conv5x1 = nn.Conv2d(inc // 4, inc // 4, 
-#                                  kernel_size=(kernel_size, 1),
-#                                  padding=(padding, 0) 
-#                                  ) 
-#         # self.dw3x3 = nn.Conv2d(outc, outc*4, 3, padding=dilation,
-#         #                dilation=dilation, groups=outc*2, bias=False)
-#         self.conv_exp = nn.Conv2d(inc, inc*4, 1, bias=False)
-#         self.conv_reduction = nn.Conv2d(inc*4, inc, 1, bias=False)
+        # self.expansion_conv = nn.Conv2d(inc, outc, kernel_size=1)
+        self.conv5x5 = nn.Conv2d(inc // 4, inc // 4, 
+                                 kernel_size=kernel_size,
+                                 padding=padding
+                                 )
+        self.conv1x5 = nn.Conv2d(inc // 4, inc // 4, 
+                                 kernel_size=(1, kernel_size),
+                                 padding=(0, padding)
+                                 )
+        self.conv5x1 = nn.Conv2d(inc // 4, inc // 4, 
+                                 kernel_size=(kernel_size, 1),
+                                 padding=(padding, 0) 
+                                 ) 
+        # self.dw3x3 = nn.Conv2d(outc, outc*4, 3, padding=dilation,
+        #                dilation=dilation, groups=outc*2, bias=False)
+        self.conv_exp = nn.Conv2d(inc, inc*4, 1, bias=False)
+        self.conv_reduction = nn.Conv2d(inc*4, inc, 1, bias=False)
         
-#         self.bn1 = nn.BatchNorm2d(inc, eps=1e-3, momentum=0.999)
-#         self.relu6 = nn.ReLU6()
+        self.bn1 = nn.BatchNorm2d(inc, eps=1e-3, momentum=0.999)
+        self.relu6 = nn.ReLU6()
         
-#         self.layerScale = nn.Parameter(1e-6 * torch.ones((inc)), requires_grad=True) if 1e-6 > 0 else None
+        self.layerScale = nn.Parameter(1e-6 * torch.ones((inc)), requires_grad=True) if 1e-6 > 0 else None
     
     
-#     def forward(self, x):
-#         identity = x
+    def forward(self, x):
+        identity = x
 
-#         x1, x2, x3, x4 = torch.chunk(x, 4, dim=1)
-#         x1 = self.conv5x5(x1)
-#         x2 = self.conv1x5(x2)
-#         x3 = self.conv5x1(x3)
+        x1, x2, x3, x4 = torch.chunk(x, 4, dim=1)
+        x1 = self.conv5x5(x1)
+        x2 = self.conv1x5(x2)
+        x3 = self.conv5x1(x3)
         
-#         x = torch.cat([x1,x2, x3, x4],dim=1)
-#         x = self.bn1(x)
+        x = torch.cat([x1,x2, x3, x4],dim=1)
+        x = self.bn1(x)
 
-#         x = self.conv_exp(x)
-#         x = self.relu6(x)
-#         x = self.conv_reduction(x)
+        x = self.conv_exp(x)
+        x = self.relu6(x)
+        x = self.conv_reduction(x)
         
         
-#         if self.layerScale is not None:
-#             x = self.layerScale.view(1, -1, 1, 1) * x
+        if self.layerScale is not None:
+            x = self.layerScale.view(1, -1, 1, 1) * x
         
-#         x = identity + x
+        x = identity + x
         
-#         return x
+        return x
 
 
 class AsymDilatedConv(nn.Module):
@@ -397,7 +397,6 @@ class AsymDilatedConv(nn.Module):
             return self.act(x)  
     
 # region - [Ghost]
-
 class CustomGhostModule(nn.Module):
     """
     Depth-specific optimized Ghost Module for monocular depth estimation
@@ -522,7 +521,6 @@ class CustomGhostModule(nn.Module):
         x = x + identity
         return x
 
-
 # class CustomGhostModule(nn.Module):
 #     def __init__(self, inc, outc = None, exp=2):
 #         super().__init__()
@@ -555,14 +553,20 @@ class CustomGhostModule(nn.Module):
 #         x = self.expand_bn(x)
 #         x = self.act(x)
         
-#         x1 = self.ex_conv(x)
+#         # x1, x2 = torch.chunk(x, 2, dim=1)
+        
+#         x1 = self.conv1x1(x)
+#         x2 = self.conv1x1(x)
+        
+#         x1 = self.ex_conv(x1)
 #         x1 = self.ex_bn(x1)
 #         x1 = self.act(x1)
         
-#         x2 = self.ch_conv(x1)
+#         x2 = self.ch_conv(x2)
 #         x2 = self.ch_bn(x2)
 #         x2 = self.act(x2)
-
+        
+#         # x = torch.cat([x1, x2], dim=1)
         
 #         x = x1 * x2 
         
@@ -571,6 +575,7 @@ class CustomGhostModule(nn.Module):
         
 #         x = x + identity
 #         return x
+
 
 # region [StarModule]
 class ConvBN(torch.nn.Sequential):

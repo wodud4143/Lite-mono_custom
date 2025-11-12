@@ -9,7 +9,8 @@ import PIL.Image as pil
 import matplotlib as mpl
 import matplotlib.cm as cm
 import importlib.util
-
+# 파일 상단 import 섹션에 추가
+import matplotlib.pyplot as plt
 import torch
 from torchvision import transforms, datasets
 
@@ -209,7 +210,6 @@ def test_simple(args,epoch,modelname):
                     
 
                     disp = outputs[("disp", 0)]
-
                     disp_resized = torch.nn.functional.interpolate(
                         disp, (original_height, original_width), mode="bilinear", align_corners=False)
 
@@ -223,12 +223,175 @@ def test_simple(args,epoch,modelname):
 
                     # Saving colormapped depth image
                     disp_resized_np = disp_resized.squeeze().cpu().numpy()
+                    
+                   
+                    
+                    # region resized disparity histogram 저장
+                    plt.figure(figsize=(6, 4))
+                    plt.hist(disp_resized_np.flatten(), bins=100, color='royalblue', alpha=0.75)
+                    plt.title(f"Disparity Distribution - {output_name}")
+                    plt.xlabel("Disparity Value")
+                    plt.ylabel("Pixel Count")
+                    plt.grid(alpha=0.3)
+                    name_dest_hist = os.path.join(output_directory, f"{output_name}_disp_histogram.png")
+                    plt.savefig(name_dest_hist, dpi=150, bbox_inches='tight')
+                    plt.close()
+                    print(f"   - Histogram saved: {name_dest_hist}")
+                    
+                    # region raw disparity histogram 저장
+                    disp_np = disp.squeeze().cpu().numpy()  
+                    plt.figure(figsize=(6, 4))
+                    plt.hist(disp_np.flatten(), bins=100, color='orange', alpha=0.7)
+                    plt.title(f"Raw Disparity Distribution (192x640) - {output_name}")
+                    plt.xlabel("Disparity Value")
+                    plt.ylabel("Pixel Count")
+                    plt.grid(alpha=0.3)
+                    name_dest_raw_hist = os.path.join(output_directory, f"{output_name}_raw_disp_hist.png")
+                    plt.savefig(name_dest_raw_hist, dpi=150, bbox_inches='tight')
+                    plt.close()
+                    print(f"   - Raw histogram saved: {name_dest_raw_hist}")
+                    
                     vmax = np.percentile(disp_resized_np, 95)
                     normalizer = mpl.colors.Normalize(vmin=disp_resized_np.min(), vmax=vmax)
                     mapper = cm.ScalarMappable(norm=normalizer, cmap='magma')
                     colormapped_im = (mapper.to_rgba(disp_resized_np)[:, :, :3] * 255).astype(np.uint8)
                     im = pil.fromarray(colormapped_im)
+                    
+                    # region y=186부터 시작해 5줄의 x축 전체 disp 추출 및 시각화
+                    y_start = 186
+                    num_lines = 5
 
+                    H, W = disp_resized_np.shape
+
+                    # RGB → BGR, uint8 변환
+                    base_vis_color = cv2.cvtColor(colormapped_im.astype(np.uint8), cv2.COLOR_RGB2BGR)
+
+                    # 저장 폴더 생성
+                    os.makedirs(output_directory, exist_ok=True)
+
+                    print("\n[Sampling full x-axis disparity values]")
+                    print(f"  [Debug] base_vis_color dtype={base_vis_color.dtype}, shape={base_vis_color.shape}")
+
+                    for i in range(num_lines):
+                        y = y_start + i
+                        if y >= H:
+                            break
+
+                        # disp 값 추출
+                        disp_line = disp_resized_np[y, :]
+                        npy_path = os.path.join(output_directory, f"{output_name}_y{y}_disp_line.npy")
+                        np.save(npy_path, disp_line)
+                        print(f"  y={y}: disp_line shape={disp_line.shape} → 저장 완료: {os.path.basename(npy_path)}")
+                        
+                        # === disparity line 그래프 시각화 ===
+                        plt.figure(figsize=(10, 4))
+                        plt.plot(np.arange(len(disp_line)), disp_line, color='royalblue', linewidth=1.5)
+                        plt.title(f"Disparity along horizontal line (y={y})")
+                        plt.xlabel("X-axis pixel position")
+                        plt.ylabel("Disparity value")
+                        plt.grid(alpha=0.3)
+
+                        graph_path = os.path.join(output_directory, f"{output_name}_y{y}_disp_graph.png")
+                        plt.savefig(graph_path, dpi=150, bbox_inches='tight')
+                        plt.close()
+                        print(f"  📊 Graph saved: {os.path.basename(graph_path)}")
+
+                        # ✅ 개별 이미지 복사본 만들기
+                        disp_vis_color = base_vis_color.copy()
+
+                        # ✅ y좌표 반전 (영상 아래→위 방향으로 선이 이동)
+                        y_screen = H - 1 - y
+
+                        # ✅ 선 시각화 (흰색, 두께 1픽셀) 
+                        cv2.line(disp_vis_color, (0, y_screen), (W - 1, y_screen), (255, 255, 255), 1)
+                        
+                        # ✅ 선 높이 표시 (텍스트 추가)
+                        text = f"y={y}"
+                        font_scale = 0.6
+                        thickness = 1
+                        text_color = (255, 255, 255)
+
+                        # 텍스트 위치를 y_screen 바로 위쪽에 배치
+                        text_x = 10  # 왼쪽 여백
+                        text_y = max(20, y_screen - 5)  # 너무 위로 가지 않게 보정
+
+                        cv2.putText(
+                            disp_vis_color,
+                            text,
+                            (text_x, text_y),
+                            cv2.FONT_HERSHEY_SIMPLEX,
+                            font_scale,
+                            text_color,
+                            thickness,
+                            cv2.LINE_AA
+                        )
+
+                        # ✅ 한글 경로 대응 저장
+                        name_disp_line = os.path.join(output_directory, f"{output_name}_y{y}_disp_line.png")
+                        success, encoded_img = cv2.imencode('.png', disp_vis_color)
+                        if success:
+                            with open(name_disp_line, mode='wb') as f:
+                                encoded_img.tofile(f)
+                            print(f"  ✅ Disp line image saved: {name_disp_line}")
+                        else:
+                            print(f"  ❌ Failed to encode image: {name_disp_line}")
+                    # # ---------------------------------------------
+                    # # 📈 y=190~200 구간의 모든 disp 값 산점도 시각화
+                    # # ---------------------------------------------
+                    # y_start_scatter, y_end_scatter = 190, 200
+                    # H, W = disp_resized_np.shape
+
+                    # y_points = []
+                    # disp_points = []
+
+                    # for y in range(y_start_scatter, y_end_scatter + 1):
+                    #     if y >= H:
+                    #         break
+                    #     disp_line = disp_resized_np[y, :]
+                    #     y_values = np.full(W, y)  # 같은 y값을 W개 반복
+                    #     y_points.append(y_values)
+                    #     disp_points.append(disp_line)
+
+                    # # numpy로 변환
+                    # y_points = np.concatenate(y_points)
+                    # disp_points = np.concatenate(disp_points)
+
+                    # # 산점도 시각화
+                    # plt.figure(figsize=(6, 5))
+                    # plt.scatter(y_points, disp_points, s=5, c=disp_points, cmap='magma', alpha=0.6)
+                    # plt.title(f"Disparity Distribution (y={y_start_scatter}~{y_end_scatter})")
+                    # plt.xlabel("Y-axis position")
+                    # plt.ylabel("Disparity value")
+                    # plt.colorbar(label="Disparity (depth inverse)")
+                    # plt.grid(alpha=0.3)
+
+                    # scatter_path = os.path.join(output_directory, f"{output_name}_disp_y{y_start_scatter}-{y_end_scatter}_scatter.png")
+                    # plt.savefig(scatter_path, dpi=150, bbox_inches='tight')
+                    # plt.close()
+                    # print(f"  📈 Scatter disparity plot saved: {scatter_path}")
+                    
+                    # ---------------------------------------------
+                    # 📊 y=190~200 구간의 disparity 히스토그램
+                    # ---------------------------------------------
+                    y_start_hist, y_end_hist = 190, 200
+                    H, W = disp_resized_np.shape
+
+                    # 구간 내 모든 disp 픽셀 모으기
+                    disp_segment = disp_resized_np[y_start_hist:y_end_hist + 1, :].flatten()
+
+                    plt.figure(figsize=(7, 5))
+                    plt.hist(disp_segment, bins=100, color='royalblue', alpha=0.8, edgecolor='black')
+                    plt.title(f"Histogram of Disparity Values (y={y_start_hist}~{y_end_hist})")
+                    plt.xlabel("Disparity value")
+                    plt.ylabel("Pixel count")
+                    plt.grid(alpha=0.3)
+
+                    hist_path = os.path.join(output_directory, f"{output_name}_disp_y{y_start_hist}-{y_end_hist}_hist.png")
+                    plt.savefig(hist_path, dpi=150, bbox_inches='tight')
+                    plt.close()
+                    print(f"  📊 Disparity histogram saved: {hist_path}")
+                    # endregion
+                    
                     name_dest_im = os.path.join(output_directory, "{}_disp.jpeg".format(output_name))
                     im.save(name_dest_im)
 
@@ -244,7 +407,7 @@ def test_simple(args,epoch,modelname):
 
 def direct():
 
-    directory = r"C:\Users\wodud\OneDrive\Desktop\도로주행 데이터\change_loss_v2" 
+    directory = r"C:\Users\wodud\OneDrive\Desktop\도로주행 데이터\best_half_cutout" 
 
     folders = [os.path.join(directory, f) for f in os.listdir(directory) if os.path.isdir(os.path.join(directory, f))]
 
@@ -256,8 +419,8 @@ def direct():
 
 
 if __name__ == '__main__':
-    modelname = "change_loss_v2"
-    epoch = 32
+    modelname = "best_half_cutout"
+    epoch = 92
     args = parse_args()
     test_simple(args,epoch=epoch, modelname=modelname)
 

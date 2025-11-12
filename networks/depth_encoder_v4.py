@@ -13,6 +13,7 @@ from networks import core_layer as core
 from networks import custom_layers as clayers
 
 
+
 # region - Main Arch
 class LiteMono(nn.Module):
     """
@@ -30,7 +31,7 @@ class LiteMono(nn.Module):
         self.asym_dims = [32, 64, 128]
 
         if height == 192 and width == 640:
-            self.dilation = [[1, 3], [1, 2], [2, 3, 6]] # Stage 0 dilation 최적화: [1,2] → [1,3], Stage 2 마지막 블록: 5 → 6 (receptive field 확대, Latency 영향 최소)
+            self.dilation = [[1, 2], [1, 2], [2, 3, 5]] # 다일레이션 수정
             
         for g in global_block_type:
             assert g in ['None', 'LGFI']
@@ -73,6 +74,10 @@ class LiteMono(nn.Module):
         stage_blocks = [
             core.AsymDilatedConv(inc=self.dims[0], outc=self.asym_dims[0], dilation=self.dilation[0][0],drop_path=dp_rates[0],residual=True),
             core.AsymDilatedConv(inc=self.dims[0], outc=self.asym_dims[0], dilation=self.dilation[0][1],drop_path=dp_rates[0 + 1],residual=True),
+            
+            # core.AsymDilatedConv_v2(inc=self.dims[0], outc=self.asym_dims[0], kernel_size = 5),
+            # core.AsymDilatedConv_v2(inc=self.dims[0], outc=self.asym_dims[0], kernel_size = 5),
+            
             core.LGFI(dim=self.dims[0], 
                       drop_path=dp_rates[0 + 2], 
                       expan_ratio=expan_ratio,
@@ -85,6 +90,10 @@ class LiteMono(nn.Module):
         stage_blocks = [
             core.AsymDilatedConv(inc=self.dims[1], outc=self.asym_dims[1], dilation=self.dilation[1][0],drop_path=dp_rates[2 + 1],residual=True),
             core.AsymDilatedConv(inc=self.dims[1], outc=self.asym_dims[1], dilation=self.dilation[1][1],drop_path=dp_rates[2 + 2],residual=True),
+            
+            # core.AsymDilatedConv_v2(inc=self.dims[1], outc=self.asym_dims[1], kernel_size = 5),
+            # core.AsymDilatedConv_v2(inc=self.dims[1], outc=self.asym_dims[1],kernel_size = 5 ),
+            
             core.LGFI(dim=self.dims[1], 
                       drop_path=dp_rates[2 + 3], 
                       expan_ratio=expan_ratio,
@@ -98,6 +107,11 @@ class LiteMono(nn.Module):
             core.AsymDilatedConv(inc=self.dims[2], outc=self.asym_dims[2], dilation=self.dilation[2][0],drop_path=dp_rates[5 + 1],residual=True),
             core.AsymDilatedConv(inc=self.dims[2], outc=self.asym_dims[2], dilation=self.dilation[2][1],drop_path=dp_rates[5 + 2],residual=True),
             core.AsymDilatedConv(inc=self.dims[2], outc=self.asym_dims[2], dilation=self.dilation[2][2],drop_path=dp_rates[5 + 3],residual=True),
+            
+            # core.AsymDilatedConv_v2(inc=self.dims[2], outc=self.asym_dims[2],kernel_size = 5 ),
+            # core.AsymDilatedConv_v2(inc=self.dims[2], outc=self.asym_dims[2], kernel_size = 5),
+            # core.AsymDilatedConv_v2(inc=self.dims[2], outc=self.asym_dims[2], kernel_size = 5),
+            
             core.LGFI(dim=self.dims[2], 
                       drop_path=dp_rates[5 + 4], 
                       expan_ratio=expan_ratio,
@@ -166,7 +180,7 @@ class LiteMono(nn.Module):
         
         """(64, 24, 80)"""
         ds8 = self.add_ds_conv_64(add_ds4) # StandardConv(stride = 2) 34,64
-        ds8 = self.cghost2_layer(ds8) # Depth-specific optimization for Stage 1
+        
         
         """(64, 24, 80)"""
         for s in range(len(self.stages[1])-1):
@@ -175,7 +189,7 @@ class LiteMono(nn.Module):
         
         
         """(64, 24, 80)"""
-        if self.gamma_8 is not None:
+        if self.gamma_24 is not None:
             x_down8 = self.gamma_8.view(1, -1, 1, 1) * x_down8
             add_ds8 = torch.add(ds8, x_down8)
         

@@ -26,7 +26,7 @@ class LiteMonoOptions:
           self.parser.add_argument("--model_name",
                                    type=str,
                                    help="the name of the folder to save the model in",
-                                   default="proposal_v2")
+                                   default="change_ghost")
           self.parser.add_argument("--split",
                                    type=str,
                                    help="which training split to use",
@@ -110,7 +110,7 @@ class LiteMonoOptions:
                                         "Initial learning rate, "
                                         "minimum learning rate, "
                                         "First cycle step size.",
-                                   default=[0.0006, 5e-6, 31, 0.0001, 1e-5, 31]) # liteweight - [0.001, 5e-6, 35, 0.0001, 1e-5, 35], pretrain - [0.0001, 5e-6, 31, 0.0001, 1e-5, 31], Scratch From -[0.0005, 5e-6, 35, 0.0001, 1e-5, 35]
+                                   default=[0.0005, 5e-6, 35, 0.0001, 1e-5, 35]) # liteweight - [0.001, 5e-6, 35, 0.0001, 1e-5, 35], pretrain - [0.0001, 5e-6, 31, 0.0001, 1e-5, 31], Scratch From -[0.0005, 5e-6, 35, 0.0001, 1e-5, 35]
           self.parser.add_argument("--num_epochs",
                                    type=int,
                                    help="number of epochs",
@@ -139,14 +139,13 @@ class LiteMonoOptions:
           # region mypretrain
           self.parser.add_argument("--mypretrain",
                                    type=str,
-                                   # default=r"C:\Users\wodud\OneDrive\Desktop\Lite-mono_custom\lite-mono-pretrain.pth",
                                    help="if set, use my pretrained encoder")
           
           # region *weights_init
           self.parser.add_argument("--weights_init",
                                    type=str,
                                    help="pretrained or scratch",
-                                   default="pretrained", #pretrained
+                                   default="pretrained",
                                    choices=["pretrained", "scratch"])
           self.parser.add_argument("--pose_model_input",
                                    type=str,

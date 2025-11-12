@@ -39,8 +39,8 @@ class KITTIDataset(MonoDataset):
 
         return os.path.isfile(velo_filename)
 
-    def get_color(self, folder, frame_index, side, do_flip, do_crop, crop_params,
-                  do_scale_aug, scale_factor, do_translation_aug, translation_x, translation_y):
+    # def get_color(self, folder, frame_index, side, do_flip, do_crop,crop_params):
+    def get_color(self, folder, frame_index, side, do_flip, do_crop,crop_params, do_cutout, cutout_params):
         color = self.loader(self.get_image_path(folder, frame_index, side))
 
         if do_flip:
@@ -52,41 +52,55 @@ class KITTIDataset(MonoDataset):
             # 랜덤 크롭
             crop_x, crop_y, crop_w, crop_h = crop_params
             color = color.crop((crop_x, crop_y, crop_x + crop_w, crop_y + crop_h))
+            
+        # cutout 적용 전 저장 
+         
+        if do_cutout and cutout_params is not None:
+            # Cutout 적용
+            color_with_cutout = self.apply_cutout(color, 
+                                    n_holes=cutout_params['n_holes'], 
+                                    length=cutout_params['length'])
+        else: color_with_cutout = color
+
+        # if do_tr_aug:
+
+
+        #     def pil_to_tensor(img):
+        #         arr = np.array(img).astype(np.float32) / 255.0
+        #         tensor = torch.from_numpy(arr).permute(2, 0, 1)
+        #         return tensor
+
+        #     def tensor_to_pil(tensor):
+        #         arr = (tensor.permute(1, 2, 0).clamp(0, 1).numpy() * 255).astype(np.uint8)
+        #         return pil.fromarray(arr)
+
+        #     def translate_image(img_tensor, tx, ty):
+        #         M = torch.tensor([
+        #             [1., 0., tx],
+        #             [0., 1., ty]
+        #         ], dtype=torch.float32).unsqueeze(0)
+        #         return KTF.warp_affine(img_tensor.unsqueeze(0), M,
+        #                             dsize=(img_tensor.shape[1], img_tensor.shape[2]),
+        #                             mode='nearest',
+        #                             padding_mode='border',
+        #                             align_corners=True).squeeze(0)
+
         
-        # Scale augmentation: PIL Image resize (개선 2)
-        if do_scale_aug and scale_factor != 1.0:
-            w, h = color.size
-            new_w = int(w * scale_factor)
-            new_h = int(h * scale_factor)
-            color = color.resize((new_w, new_h), pil.LANCZOS)
-            # Resize 후 원래 크기로 복원 (crop 또는 padding)
-            if scale_factor > 1.0:
-                # Scale up: center crop
-                left = (new_w - w) // 2
-                top = (new_h - h) // 2
-                color = color.crop((left, top, left + w, top + h))
-            else:
-                # Scale down: padding
-                new_color = pil.new('RGB', (w, h), (0, 0, 0))
-                left = (w - new_w) // 2
-                top = (h - new_h) // 2
-                new_color.paste(color, (left, top))
-                color = new_color
+        #     color_tensor = pil_to_tensor(color)
+        #     h, w = color_tensor.shape[1], color_tensor.shape[2]
+
+    
+        #     tx_ratio, ty_ratio = tr_params
+        #     tx = int(tx_ratio * w)
+        #     ty = int(ty_ratio * h)
+
+        #     translated_tensor = translate_image(color_tensor, tx, ty)
+
+        #     color = tensor_to_pil(translated_tensor)
         
-        # Translation augmentation: PIL Image transform (개선 4)
-        if do_translation_aug and (translation_x != 0.0 or translation_y != 0.0):
-            w, h = color.size
-            tx = int(translation_x * w)
-            ty = int(translation_y * h)
-            # Affine transformation matrix: [1, 0, tx, 0, 1, ty]
-            color = color.transform(
-                color.size,
-                pil.AFFINE,
-                (1, 0, tx, 0, 1, ty),
-                fill=(0, 0, 0)
-            )
         
-        return color
+        return color, color_with_cutout
+        # return color
 
 
 class KITTIRAWDataset(KITTIDataset):
