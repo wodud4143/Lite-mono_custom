@@ -135,15 +135,7 @@ class MonoDataset(data.Dataset):
                 n, im, i = k    
                 if n == "color_cutout": 
                     inputs[("color_aug", im, i)] = self.to_tensor(color_aug(f)) # cutout 적용 O
-                    
-                    
 
-        # for k in list(inputs):
-        #     f = inputs[k]
-        #     if "color" in k:
-        #         n, im, i = k
-        #         inputs[(n, im, i)] = self.to_tensor(f)
-        #         inputs[(n + "_aug", im, i)] = self.to_tensor(color_aug(f))
         
 
     def __len__(self):
@@ -177,7 +169,6 @@ class MonoDataset(data.Dataset):
 
         do_color_aug = self.is_train and random.random() > 0.5
         do_flip = self.is_train and random.random() > 0.5
-        # do_tr_aug = self.is_train and random.random() > 0.5
         do_crop = self.is_train and random.random() > 0.5
         do_cutout = self.is_train and random.random() > 0.5
 
@@ -217,15 +208,6 @@ class MonoDataset(data.Dataset):
         else:
             cutout_params = None
             
-        # if do_rotate:
-        #     rot_angle =  random.choice([-1, 1]) * random.uniform(20, 25)
-        # else:
-        #     rot_angle = 0
-
-        # if do_tr_aug:
-        #     tr_params = (random.uniform(-0.1, 0.1), random.uniform(-0.1, 0.1))  # 10%로 줄임
-        # else:
-        #     tr_params = (0, 0)
 
         # region 오리지널 컷아웃 제거
         for i in self.frame_idxs:
@@ -235,13 +217,13 @@ class MonoDataset(data.Dataset):
                 color_original, color_with_cutout  = self.get_color(folder, frame_index, other_side, do_flip, do_crop, crop_params, do_cutout, cutout_params)
                 inputs[("color", i, -1)] = color_original
                 inputs[("color_cutout", i, -1)] = color_with_cutout
-                # inputs[("color", i, -1)] = self.get_color(folder, frame_index, other_side, do_flip, do_crop, crop_params, do_cutout, cutout_params)
+                
 
             else:
                 color_original, color_with_cutout = self.get_color(folder, frame_index + i, side, do_flip, do_crop, crop_params, do_cutout, cutout_params)
                 inputs[("color", i, -1)] = color_original
                 inputs[("color_cutout", i, -1)] = color_with_cutout
-                # inputs[("color", i, -1)] = self.get_color(folder, frame_index + i, side, do_flip, do_crop, crop_params, do_cutout, cutout_params)
+               
 
         # adjusting intrinsics to match each scale in the pyramid
         for scale in range(self.num_scales):

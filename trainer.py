@@ -186,7 +186,7 @@ class Trainer:
                                      self.opt.frame_ids, 4, is_train=True, img_ext=img_ext)
         
         self.train_loader = DataLoader(train_dataset, self.opt.batch_size, True, 
-                                       num_workers=self.opt.num_workers, pin_memory=True, drop_last=True,prefetch_factor=2,persistent_workers=False) #prefetch_factor=2,persistent_workers=True
+                                       num_workers=self.opt.num_workers, pin_memory=True, drop_last=True,prefetch_factor=2,persistent_workers=True) #prefetch_factor=2,persistent_workers=True
         # ---------------------------------------------------------------
         
         # ------------------------ Validation ------------------------
@@ -194,7 +194,7 @@ class Trainer:
                                    self.opt.frame_ids, 4, is_train=False, img_ext=img_ext)
         
         self.val_loader = DataLoader(val_dataset, self.opt.batch_size, True,
-                                     num_workers=self.opt.num_workers, pin_memory=True, drop_last=True,prefetch_factor=2,persistent_workers=False) #prefetch_factor=2,persistent_workers=True
+                                     num_workers=self.opt.num_workers, pin_memory=True, drop_last=True,prefetch_factor=2,persistent_workers=True) #prefetch_factor=2,persistent_workers=True
         # ---------------------------------------------------------------
         self.val_iter = iter(self.val_loader)
 

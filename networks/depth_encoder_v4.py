@@ -51,14 +51,15 @@ class LiteMono(nn.Module):
 
         self.ds_conv_3x3_32 = clayers.StandardConv(self.dims[0], self.dims[0], kernel_size=3, stride=2, padding=1, bn_act=True)
         
-        self.cghost_layer = core.CustomGhostModule(self.dims[0], self.dims[0]//2)
-
+        # self.cghost_layer = core.CustomGhostModule(self.dims[0], self.dims[0]//2)
+        self.inpNext_layer1 = core.AsymDilatedConv_v2(self.dims[0], kernel_size=3)
+        self.inpNext_layer2 = core.AsymDilatedConv_v2(self.dims[1], kernel_size=3)
         self.ds_conv2 = clayers.StandardConv(self.dims[0], self.dims[1],
                                           kernel_size=3,
                                           stride=2, 
                                           padding=1, 
                                           bn_act=True)
-        self.cghost2_layer = core.CustomGhostModule(self.dims[1], self.dims[1]//2)
+        # self.cghost2_layer = core.CustomGhostModule(self.dims[1], self.dims[1]//2)
 
         
         
@@ -74,10 +75,6 @@ class LiteMono(nn.Module):
         stage_blocks = [
             core.AsymDilatedConv(inc=self.dims[0], outc=self.asym_dims[0], dilation=self.dilation[0][0],drop_path=dp_rates[0],residual=True),
             core.AsymDilatedConv(inc=self.dims[0], outc=self.asym_dims[0], dilation=self.dilation[0][1],drop_path=dp_rates[0 + 1],residual=True),
-            
-            # core.AsymDilatedConv_v2(inc=self.dims[0], outc=self.asym_dims[0], kernel_size = 5),
-            # core.AsymDilatedConv_v2(inc=self.dims[0], outc=self.asym_dims[0], kernel_size = 5),
-            
             core.LGFI(dim=self.dims[0], 
                       drop_path=dp_rates[0 + 2], 
                       expan_ratio=expan_ratio,
@@ -90,10 +87,6 @@ class LiteMono(nn.Module):
         stage_blocks = [
             core.AsymDilatedConv(inc=self.dims[1], outc=self.asym_dims[1], dilation=self.dilation[1][0],drop_path=dp_rates[2 + 1],residual=True),
             core.AsymDilatedConv(inc=self.dims[1], outc=self.asym_dims[1], dilation=self.dilation[1][1],drop_path=dp_rates[2 + 2],residual=True),
-            
-            # core.AsymDilatedConv_v2(inc=self.dims[1], outc=self.asym_dims[1], kernel_size = 5),
-            # core.AsymDilatedConv_v2(inc=self.dims[1], outc=self.asym_dims[1],kernel_size = 5 ),
-            
             core.LGFI(dim=self.dims[1], 
                       drop_path=dp_rates[2 + 3], 
                       expan_ratio=expan_ratio,
@@ -107,11 +100,6 @@ class LiteMono(nn.Module):
             core.AsymDilatedConv(inc=self.dims[2], outc=self.asym_dims[2], dilation=self.dilation[2][0],drop_path=dp_rates[5 + 1],residual=True),
             core.AsymDilatedConv(inc=self.dims[2], outc=self.asym_dims[2], dilation=self.dilation[2][1],drop_path=dp_rates[5 + 2],residual=True),
             core.AsymDilatedConv(inc=self.dims[2], outc=self.asym_dims[2], dilation=self.dilation[2][2],drop_path=dp_rates[5 + 3],residual=True),
-            
-            # core.AsymDilatedConv_v2(inc=self.dims[2], outc=self.asym_dims[2],kernel_size = 5 ),
-            # core.AsymDilatedConv_v2(inc=self.dims[2], outc=self.asym_dims[2], kernel_size = 5),
-            # core.AsymDilatedConv_v2(inc=self.dims[2], outc=self.asym_dims[2], kernel_size = 5),
-            
             core.LGFI(dim=self.dims[2], 
                       drop_path=dp_rates[5 + 4], 
                       expan_ratio=expan_ratio,
@@ -127,8 +115,6 @@ class LiteMono(nn.Module):
         self.gamma_8 = nn.Parameter(layer_scale_init_value * torch.ones((self.dims[1])),
                                   requires_grad=True) if layer_scale_init_value > 0 else None
         
-        # StarModule
-        # self.star = core.Star(dim=self.dims[0], mlp_ratio=3)
         
         self.apply(self._init_weights)
 
@@ -164,7 +150,8 @@ class LiteMono(nn.Module):
         
         """(32, 48, 160)"""
         ds4 = self.ds_conv_3x3_32(ds2) # 32, 32
-        ds4 = self.cghost_layer(ds4) # 32, 32
+        # ds4 = self.cghost_layer(ds4) # 32, 32
+        ds4 = self.inpNext_layer1(ds4) # 32, 32
 
         """(32, 48, 160)"""
         for s in range(len(self.stages[0])-1):
@@ -179,7 +166,8 @@ class LiteMono(nn.Module):
         
         
         """(64, 24, 80)"""
-        ds8 = self.add_ds_conv_64(add_ds4) # StandardConv(stride = 2) 34,64
+        ds8 = self.add_ds_conv_64(add_ds4) # StandardConv(stride = 2) 32,64
+        ds8 = self.inpNext_layer2(ds8) 
         
         
         """(64, 24, 80)"""
@@ -189,7 +177,7 @@ class LiteMono(nn.Module):
         
         
         """(64, 24, 80)"""
-        if self.gamma_24 is not None:
+        if self.gamma_8 is not None:
             x_down8 = self.gamma_8.view(1, -1, 1, 1) * x_down8
             add_ds8 = torch.add(ds8, x_down8)
         

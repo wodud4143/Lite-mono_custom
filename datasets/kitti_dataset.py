@@ -39,7 +39,7 @@ class KITTIDataset(MonoDataset):
 
         return os.path.isfile(velo_filename)
 
-    # def get_color(self, folder, frame_index, side, do_flip, do_crop,crop_params):
+
     def get_color(self, folder, frame_index, side, do_flip, do_crop,crop_params, do_cutout, cutout_params):
         color = self.loader(self.get_image_path(folder, frame_index, side))
 
@@ -62,45 +62,9 @@ class KITTIDataset(MonoDataset):
                                     length=cutout_params['length'])
         else: color_with_cutout = color
 
-        # if do_tr_aug:
-
-
-        #     def pil_to_tensor(img):
-        #         arr = np.array(img).astype(np.float32) / 255.0
-        #         tensor = torch.from_numpy(arr).permute(2, 0, 1)
-        #         return tensor
-
-        #     def tensor_to_pil(tensor):
-        #         arr = (tensor.permute(1, 2, 0).clamp(0, 1).numpy() * 255).astype(np.uint8)
-        #         return pil.fromarray(arr)
-
-        #     def translate_image(img_tensor, tx, ty):
-        #         M = torch.tensor([
-        #             [1., 0., tx],
-        #             [0., 1., ty]
-        #         ], dtype=torch.float32).unsqueeze(0)
-        #         return KTF.warp_affine(img_tensor.unsqueeze(0), M,
-        #                             dsize=(img_tensor.shape[1], img_tensor.shape[2]),
-        #                             mode='nearest',
-        #                             padding_mode='border',
-        #                             align_corners=True).squeeze(0)
-
-        
-        #     color_tensor = pil_to_tensor(color)
-        #     h, w = color_tensor.shape[1], color_tensor.shape[2]
-
-    
-        #     tx_ratio, ty_ratio = tr_params
-        #     tx = int(tx_ratio * w)
-        #     ty = int(ty_ratio * h)
-
-        #     translated_tensor = translate_image(color_tensor, tx, ty)
-
-        #     color = tensor_to_pil(translated_tensor)
-        
         
         return color, color_with_cutout
-        # return color
+
 
 
 class KITTIRAWDataset(KITTIDataset):
